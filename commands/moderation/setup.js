@@ -1,15 +1,14 @@
-const {
-    EmbedBuilder,
-    PermissionFlagsBits,
-    ChannelType
-} = require('discord.js');
+'use strict';
+
+const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const db = require('../../utils/database');
 const config = require('../../config');
+const colorRoles = require('./color-roles');
 
 module.exports = {
     name: 'setup',
-    aliases: ['تفعيل', 'اعداد', 'إعداد'],
-    description: 'إعداد السيرفر وإنشاء القنوات والرتب تلقائياً',
+    aliases: ['تفعيل', 'اعداد'],
+    description: 'إعداد وإنشاء الرتب الأساسية (الألوان، السجن، الكتم)',
     usage: 'تفعيل',
     permissions: [PermissionFlagsBits.Administrator],
 
@@ -22,175 +21,100 @@ module.exports = {
         }
 
         const guild = message.guild;
-        const results = { success: [], failed: [], skipped: [] };
+        const results = { success: [], skipped: [], failed: [] };
 
-        // رسالة جاري الإعداد
         const loadingEmbed = new EmbedBuilder()
             .setColor('#FFA500')
-            .setTitle('⚙️ جاري إعداد السيرفر...')
+            .setTitle('⚙️ جاري إنشاء الرتب الأساسية...')
             .setDescription('```\n⏳ الرجاء الانتظار...\n```')
             .setTimestamp();
         const msg = await message.reply({ embeds: [loadingEmbed] });
 
-        // ─── إنشاء الرتب ────────────────────────────────────────
-        const rolesToCreate = [
-            { key: 'jailRole', name: config.jailRoleName || '🔒┃سجين', color: '#FF0000', perms: [], deny: [PermissionFlagsBits.SendMessages, PermissionFlagsBits.Speak] },
-            { key: 'muteRole', name: config.muteRoleName || '🔇┃مكتوم', color: '#808080', perms: [], deny: [PermissionFlagsBits.SendMessages] },
-        ];
-
-        for (const roleDef of rolesToCreate) {
-            try {
-                const existing = guild.roles.cache.find(r => r.name === roleDef.name);
-                if (existing) {
-                    results.skipped.push(`🔄 رتبة **${roleDef.name}** موجودة مسبقاً`);
-                    if (!db.getGuildData(guild.id)[roleDef.key]) {
-                        db.updateGuildData(guild.id, { [roleDef.key]: existing.id });
-                    }
-                    continue;
-                }
-                const role = await guild.roles.create({
-                    name: roleDef.name,
-                    color: roleDef.color,
-                    reason: 'إعداد تلقائي بواسطة البوت'
+        // 1. رتبة السجن
+        try {
+            let jailRole = guild.roles.cache.find(r => r.name === config.jailRoleName);
+            if (!jailRole) {
+                jailRole = await guild.roles.create({
+                    name: config.jailRoleName || '🔒┃سجين',
+                    color: '#000000',
+                    permissions: [],
+                    reason: 'إعداد الرتب التلقائي'
                 });
-                db.updateGuildData(guild.id, { [roleDef.key]: role.id });
-
-                // منع الكتابة في كل القنوات لهذه الرتبة
+                
+                // منع الرتبة من الكتابة
                 for (const channel of guild.channels.cache.values()) {
                     if (channel.isTextBased() || channel.isVoiceBased()) {
-                        await channel.permissionOverwrites.create(role, Object.fromEntries(roleDef.deny.map(p => [p, false]))).catch(() => { });
+                        await channel.permissionOverwrites.create(jailRole, {
+                            [PermissionFlagsBits.SendMessages]: false,
+                            [PermissionFlagsBits.Speak]: false
+                        }).catch(() => {});
                     }
                 }
-                results.success.push(`✅ تم إنشاء رتبة **${roleDef.name}**`);
-            } catch (e) {
-                results.failed.push(`❌ فشل إنشاء رتبة **${roleDef.name}**: ${e.message}`);
+                results.success.push(`✅ رتبة السجن (**${jailRole.name}**)`);
+            } else {
+                results.skipped.push(`🔄 رتبة السجن موجودة مسبقاً`);
             }
+            db.updateGuildData(guild.id, { jailRole: jailRole.id });
+        } catch (e) {
+            results.failed.push(`❌ رتبة السجن: ${e.message}`);
         }
 
-        // ─── إنشاء القنوات ───────────────────────────────────────
-        const channelsToCreate = [
-            {
-                key: 'logChannel',
-                name: config.logChannelName || '📝┃السجلات',
-                type: ChannelType.GuildText,
-                perms: [
-                    { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.SendMessages] }
-                ]
-            },
-            {
-                key: 'punishmentsChannel',
-                name: config.punishmentsChannelName || '⚖️┃العقوبات',
-                type: ChannelType.GuildText,
-                perms: [
-                    { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.SendMessages] }
-                ]
-            },
-            {
-                key: 'bankChannel',
-                name: config.bankChannelName || '💰┃البنك',
-                type: ChannelType.GuildText,
-                perms: []
-            },
-            {
-                key: 'gamesChannel',
-                name: config.gamesChannelName || '🎮┃الألعاب',
-                type: ChannelType.GuildText,
-                perms: []
-            },
-            {
-                key: 'companiesChannelId',
-                name: '🏢・الشركات',
-                type: ChannelType.GuildText,
-                perms: [
-                    { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.SendMessages, PermissionFlagsBits.AddReactions] },
-                    { id: guild.members.me.id, allow: [PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageMessages] }
-                ]
-            }
-        ];
-
-        for (const chDef of channelsToCreate) {
-            try {
-                const currentData = db.getGuildData(guild.id);
-                const currentId = currentData[chDef.key];
-                const existing = currentId ? guild.channels.cache.get(currentId) : guild.channels.cache.find(c => c.name === chDef.name);
-
-                if (existing) {
-                    results.skipped.push(`🔄 قناة **${chDef.name}** موجودة مسبقاً`);
-                    if (!currentId) db.updateGuildData(guild.id, { [chDef.key]: existing.id });
-                    continue;
-                }
-
-                const permOverwrites = chDef.perms.map(p => ({
-                    id: p.id,
-                    deny: p.deny || [],
-                    allow: p.allow || []
-                }));
-
-                const ch = await guild.channels.create({
-                    name: chDef.name,
-                    type: chDef.type,
-                    permissionOverwrites: permOverwrites,
-                    reason: 'إعداد تلقائي بواسطة البوت'
+        // 2. رتبة الكتم
+        try {
+            let muteRole = guild.roles.cache.find(r => r.name === config.muteRoleName || r.name === '🔇┃مكتوم');
+            if (!muteRole) {
+                muteRole = await guild.roles.create({
+                    name: config.muteRoleName || '🔇┃مكتوم',
+                    color: '#808080',
+                    permissions: [],
+                    reason: 'إعداد الرتب التلقائي'
                 });
-
-                db.updateGuildData(guild.id, { [chDef.key]: ch.id });
-                results.success.push(`✅ تم إنشاء قناة **${chDef.name}**`);
-            } catch (e) {
-                results.failed.push(`❌ فشل إنشاء قناة **${chDef.name}**: ${e.message}`);
+                
+                for (const channel of guild.channels.cache.values()) {
+                    if (channel.isTextBased() || channel.isVoiceBased()) {
+                        await channel.permissionOverwrites.create(muteRole, {
+                            [PermissionFlagsBits.SendMessages]: false
+                        }).catch(() => {});
+                    }
+                }
+                results.success.push(`✅ رتبة الكتم (**${muteRole.name}**)`);
+            } else {
+                results.skipped.push(`🔄 رتبة الكتم موجودة مسبقاً`);
             }
+            db.updateGuildData(guild.id, { muteRole: muteRole.id });
+        } catch (e) {
+            results.failed.push(`❌ رتبة الكتم: ${e.message}`);
         }
 
-        // ─── وضع علامة اكتمال الإعداد ────────────────────────────
-        db.updateGuildData(guild.id, { setupComplete: true });
+        // 3. رتب الألوان
+        try {
+            await msg.edit({ embeds: [new EmbedBuilder().setColor('#FFA500').setTitle('🎨 جاري إنشاء رتب الألوان (20 لون)...')] });
+            const createdColorsCount = await colorRoles.createGuildColorRoles(guild);
+            if (createdColorsCount > 0) {
+                results.success.push(`✅ تم إنشاء **${createdColorsCount}** رتب ألوان جديدة`);
+            } else {
+                results.skipped.push(`🔄 جميع رتب الألوان موجودة مسبقاً`);
+            }
+        } catch (e) {
+            results.failed.push(`❌ رتب الألوان: ${e.message}`);
+        }
 
-        // ─── إنشاء Embed النتيجة ─────────────────────────────────
+        // النتيجة النهائية
         const totalDone = results.success.length;
-        const totalSkipped = results.skipped.length;
         const totalFailed = results.failed.length;
-
         let color = '#00C853';
         if (totalFailed > 0 && totalDone === 0) color = '#FF1744';
         else if (totalFailed > 0) color = '#FFA500';
 
         const finalEmbed = new EmbedBuilder()
             .setColor(color)
-            .setTitle('📊 تقرير الإعداد التلقائي')
-            .setDescription(`**السيرفر**: ${guild.name}`)
-            .setThumbnail(guild.iconURL())
-            .setTimestamp()
-            .setFooter({ text: `${totalDone} تم • ${totalSkipped} موجود • ${totalFailed} فشل` });
+            .setTitle('📊 تقرير إعداد الرتب')
+            .setDescription('تم الانتهاء من فحص وتجهيز الرتب المطلوبة!')
+            .setTimestamp();
 
-        if (results.success.length > 0) {
-            finalEmbed.addFields({
-                name: `✅ تم إنشاؤها (${results.success.length})`,
-                value: results.success.join('\n'),
-                inline: false
-            });
-        }
-
-        if (results.skipped.length > 0) {
-            finalEmbed.addFields({
-                name: `🔄 موجودة مسبقاً (${results.skipped.length})`,
-                value: results.skipped.join('\n'),
-                inline: false
-            });
-        }
-
-        if (results.failed.length > 0) {
-            finalEmbed.addFields({
-                name: `❌ فشل إنشاؤها (${results.failed.length})`,
-                value: results.failed.join('\n'),
-                inline: false
-            });
-        }
-
-        if (totalDone === 0 && totalFailed === 0) {
-            finalEmbed.addFields({
-                name: '💡 ملاحظة',
-                value: 'جميع القنوات والرتب كانت موجودة مسبقاً. لا حاجة لإعادة الإنشاء.',
-                inline: false
-            });
-        }
+        if (results.success.length > 0) finalEmbed.addFields({ name: '✅ تم إنشاؤها', value: results.success.join('\n') });
+        if (results.skipped.length > 0) finalEmbed.addFields({ name: '🔄 موجودة مسبقاً', value: results.skipped.join('\n') });
+        if (results.failed.length > 0) finalEmbed.addFields({ name: '❌ فشل إنشاؤها', value: results.failed.join('\n') });
 
         await msg.edit({ embeds: [finalEmbed] });
     }
