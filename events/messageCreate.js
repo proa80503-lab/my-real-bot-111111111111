@@ -1,477 +1,262 @@
-'use strict';
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, MessageFlags } = require('discord.js');
 
-const { Events } = require('discord.js');
-const config = require('../config');
-const axios = require('axios');
-const db = require('../utils/database');
-const levels = require('../utils/levels');
-const protection = require('../utils/protection');
-const securityMonitor = require('../utils/security-monitor');
-const chatLearner = require('../utils/chat-learner');
-const randomInteractions = require('../utils/random-interactions');
-const aiBrain = require('../utils/ai-brain');
-const dailyChallenges = require('../utils/daily-challenges');
-
-// ─── أوامر الموسيقى المختصرة ───────────────────────────────────────────────
-let musicCmd = null;
-try {
-    musicCmd = require('../commands/fun/music');
-} catch {
-    // ملف الموسيقى غير موجود — تجاهل بصمت
-}
-
-const MUSIC_CMDS_MULTI = ['تكرار قائمة', 'ايش يشتغل'];
-const MUSIC_CMDS = [
-    'ش', 'شغّل', 'play',
-    'وقف', 'stop', 'اطلع',
-    'بوز', 'توقف', 'pause',
-    'كمّل', 'كمل', 'resume',
-    'تخطي', 'سكيب', 'skip', 'ياي',
-    'طابور', 'قائمة', 'queue',
-    'صوت', 'vol',
-    'تكرار', 'loop',
-    'الحين', 'np',
-];
-
-// ─── أوامر الغرف بدون برفكس ────────────────────────────────────────────────
-const ROOM_COMMANDS = [
-    'غرفة جديدة', 'غرف', 'غرفتي', 'حذف غرفة', 'تجديد غرفة',
-    'new-room', 'rooms', 'my-room', 'delete-room', 'renew-room',
-];
-
-// ─── أوامر السيرفر (تفعيل) — مطابقة كاملة فقط ─────────────────────
-// تنبيه: تفعيل كلان تختلف عن تفعيل (!يجب أن تكون مطابقة كاملة)
-const SERVER_SETUP_TRIGGERS = [
-    'تفعيل', 'اعادة تفعيل', 'اعادة-تفعيل', 'setup-server', 'reset-server', 'بناء-سيرفر'
-];
-
-// أوامر الكلانات — محمية من التعارض
-const CLAN_TRIGGERS = [
-    'تفعيل كلان', 'تفعيل-كلان', 'setup clans', 'setup-clans',
-    'كلان', 'كلانات', 'قبائل', 'clan', 'clans'
-];
-
-// ─── أوامر بول ────────────────────────────────────────────────────────────
-const POLL_PREFIXES = ['بول ', 'poll ', 'استطلاع ', 'تصويت '];
-
-// ─── أوامر rep ────────────────────────────────────────────────────────────
-const REP_TRIGGERS = ['+rep', 'rep ', 'سمعة ', 'سمعة', 'صدارة سمعة'];
-
-// XP Cooldown
-const xpCooldowns = new Map();
-const XP_COOLDOWN = 30000;
-
-// تنظيف xpCooldowns كل 5 دقائق
-const _xpCleanup = setInterval(() => {
-    const now = Date.now();
-    for (const [uid, ts] of xpCooldowns) {
-        if (now - ts > XP_COOLDOWN) xpCooldowns.delete(uid);
-    }
-}, 5 * 60 * 1000);
-_xpCleanup.unref?.();
-
-module.exports = {
-    name: Events.MessageCreate,
-
-    async execute(message) {
-        if (message.author.bot) return;
-
-        let content = message.content.trim();
-        const prefix = config.prefix;
-        const lowMsg = content.toLowerCase().trim();
-
-        // ── تسجيل الرسالة في AI Brain (دائماً)
-        if (message.guild) {
-            try {
-                aiBrain.recordUserMessage(
-                    message.author.id,
-                    message.author.displayName || message.author.username,
-                    content,
-                    message.guild.id
-                );
-            } catch { /* silent */ }
-        }
-
-        // ── 🔑 أوامر المالك الخاصة — إرسال لوحة التحكم عبر DM
-        if (message.author.id === config.ownerId) {
-            const ownerTriggers = ['داشبورد', 'dashboard', 'هيلب', 'help', '!help', '!داشبورد'];
-            if (ownerTriggers.includes(lowMsg)) {
-                try {
-                    const ownerDashboard = require('../commands/main/owner-dashboard');
-                    await ownerDashboard.sendOwnerDashboard(message);
-                } catch (e) {
-                    console.error('[OwnerDashboard] خطأ:', e.message);
-                }
-                return;
-            }
-        }
-
-        // ── أوامر الكلانات (تقدم على تفعيل السيرفر لمنع التعارض)
-        if (CLAN_TRIGGERS.some(t => lowMsg === t || lowMsg.startsWith(t + ' '))) {
-            try {
-                const clansCmd = require('../commands/social/clans');
-                const clanArgs = content.trim().split(/ +/).slice(1);
-                // إذا كانت 'تفعيل كلان' أرسل args = ['اعداد']
-                if (lowMsg.startsWith('تفعيل كلان') || lowMsg.startsWith('تفعيل-كلان')) {
-                    await clansCmd.execute(message, ['setup']);
-                } else {
-                    await clansCmd.execute(message, clanArgs);
-                }
-            } catch (e) {
-                console.error('[Clans] خطأ:', e.message);
-                message.reply('❌ خطأ في نظام الكلانات: ' + e.message).catch(() => {});
-            }
-            return;
-        }
-
-        // ── تفعيل/إعادة تفعيل السيرفر (مطابقة كاملة فقط — لا تستخدم startsWith)
-        if (SERVER_SETUP_TRIGGERS.some(t => lowMsg === t)) {
-            try {
-                const serverSetup = require('../commands/moderation/server-setup');
-                await serverSetup.execute(message, []);
-            } catch (e) {
-                console.error('[ServerSetup] خطأ:', e.message);
-                message.reply('❌ حدث خطأ في إعداد السيرفر: ' + e.message).catch(() => {});
-            }
-            return;
-        }
-
-        // ── أوامر الغرف بدون برفكس
-        if (ROOM_COMMANDS.some(cmd => lowMsg === cmd || lowMsg.startsWith(cmd + ' '))) {
-            try {
-                const roomCreator = require('../commands/moderation/room-creator');
-                const roomArgs = content.split(/ +/).slice(lowMsg.startsWith('غرفة جديدة') ? 2 : 1);
-                await roomCreator.execute(message, roomArgs);
-            } catch (e) {
-                console.error('[RoomCreator] خطأ:', e.message);
-                message.reply('❌ خطأ في نظام الغرف: ' + e.message).catch(() => { });
-            }
-            return;
-        }
-
-        // ── أوامر الاستطلاع (بول)
-        if (POLL_PREFIXES.some(p => lowMsg.startsWith(p))) {
-            try {
-                const pollCmd = require('../commands/social/poll');
-                const pollArgs = content.split(/ +/).slice(1);
-                await pollCmd.execute(message, pollArgs);
-            } catch (e) {
-                console.error('[Poll] خطأ:', e.message);
-            }
-            return;
-        }
-
-        // ── أوامر السمعة
-        if (REP_TRIGGERS.some(t => lowMsg === t || lowMsg.startsWith(t + ' ') || lowMsg.startsWith(t))) {
-            if (lowMsg === 'سمعة' || (lowMsg.startsWith('سمعة') && !message.mentions.users.size)) {
-                // عرض سمعة النفس — يمر للأوامر العادية
-            } else if (message.mentions.users.size > 0) {
-                try {
-                    const repCmd = require('../commands/social/reputation');
-                    const repArgs = content.split(/ +/).slice(1);
-                    await repCmd.execute(message, repArgs);
-                } catch (e) {
-                    console.error('[Reputation] خطأ:', e.message);
-                }
-                return;
-            }
-        }
-
-        // ── أمر التحديات
-        if (lowMsg === 'تحديات' || lowMsg === 'تحدياتي' || lowMsg === 'challenges') {
-            try {
-                const challengesCmd = require('../commands/main/challenges');
-                await challengesCmd.execute(message, []);
-            } catch (e) {
-                console.error('[Challenges] خطأ:', e.message);
-            }
-            return;
-        }
-
-        // ── أمر "قول/قل" بدون prefix
-        if (lowMsg.startsWith('قول ') || lowMsg.startsWith('قل ')) {
-            const sayCmd = message.client.commands.get('say');
-            if (sayCmd) {
-                const sayArgs = content.trim().split(/ +/).slice(1);
-                return await sayCmd.execute(message, sayArgs);
-            }
-        }
-
-        // ── فحص الحماية المتقدمة (الأولوية القصوى)
-        if (message.guild) {
-            if (await securityMonitor.checkTokenSniffing(message)) return;
-            if (await securityMonitor.checkPhishing(message)) return;
-            if (await protection.checkSpam(message)) return;
-            if (await protection.checkBadWords(message)) return;
-
-            if (message.member && !message.member.permissions.has('Administrator')) {
-                if (await protection.checkDuplicateMessages(message)) return;
-                if (await protection.checkMentionSpam(message)) return;
-                if (await protection.checkEmojiSpam(message)) return;
-                if (await protection.checkCaps(message)) return;
-            }
-        }
-
-        // ── تحليل الأمر
-        let isCommand = false;
-        let commandName = '';
-        let args = [];
-
-        if (content.startsWith(prefix)) {
-            args = content.slice(prefix.length).trim().split(/ +/);
-            commandName = args.shift().toLowerCase();
-            isCommand = true;
-        } else {
-            const tokens = content.split(/ +/);
-
-            if (musicCmd) {
-                let musicHandled = false;
-                const cmdToken = tokens[0].toLowerCase();
-
-                for (const mc of MUSIC_CMDS_MULTI) {
-                    if (lowMsg.startsWith(mc)) {
-                        const musicArgs = content.slice(mc.length).trim().split(/ +/);
-                        await musicCmd.execute(message, musicArgs);
-                        musicHandled = true;
-                        break;
-                    }
-                }
-
-                if (!musicHandled && MUSIC_CMDS.includes(cmdToken)) {
-                    const musicArgs = tokens.slice(1);
-                    await musicCmd.execute(message, musicArgs);
-                    musicHandled = true;
-                }
-
-                if (musicHandled) return;
-            }
-
-            const { command: found, wordCount } = _resolveCommand(tokens, message.client);
-            if (found) {
-                commandName = tokens.slice(0, wordCount).join(' ').toLowerCase();
-                args = tokens.slice(wordCount);
-                isCommand = true;
-            }
-        }
-
-        // ── تنفيذ الأمر
-        if (isCommand) {
-            const command = _lookupCommand(commandName, message.client);
-
-            if (command) {
-                // فحص صلاحيات
-                if (command.ownerOnly && message.author.id !== config.ownerId) {
-                    return message.reply('❌ هذا الأمر للمالك فقط!').catch(() => { });
-                }
-                if (command.permissions && message.member &&
-                    !message.member.permissions.has(command.permissions)) {
-                    return message.reply('❌ ليس لديك صلاحية لاستخدام هذا الأمر!');
-                }
-
-                try {
-                    await command.execute(message, args);
-
-                    // تحديث تحدي الرسائل
-                    await dailyChallenges.updateProgress(message.author.id, 'messages', 1, message).catch(() => { });
-
-                } catch (error) {
-                    console.error(`[Command:${commandName}]`, error);
-                    message.reply(`❌ حدث خطأ أثناء تنفيذ الأمر: ${error.message || 'خطأ غير متوقع'}`).catch(() => { });
-                }
-                return;
-            }
-        }
-
-        // ── ما بعد الأوامر
-        const isPublicChannel = message.guild
-            ? (message.channel.permissionsFor(message.guild.roles.everyone)?.has('SendMessages') ?? true)
-            : true;
-
-        if (!isPublicChannel) return;
-
-        if (!isCommand) {
-            const isRestricted = protection.isPersonalChatRestricted?.(message.channel) || false;
-
-            if (!isRestricted) {
-                chatLearner.learn(message);
-                const wonChallenge = await randomInteractions.checkChallenge(message);
-                if (wonChallenge) return;
-
-                // تحديث تحدي الرسائل
-                await dailyChallenges.updateProgress(message.author.id, 'messages', 1, message).catch(() => { });
-            }
-        }
-
-        // ── ردود مخصصة
-        try {
-            const customResponses = require('../commands/main/custom-responses');
-            if (customResponses?.checkResponse && await customResponses.checkResponse(message)) return;
-        } catch { }
-
-        // ── كشف المنشن المباشر فقط (لا الـ Reply)
-        // تم إلغاء: الرد على الـ Reply لأنه مزعج
-        const isMentionedDirectly = message.mentions.has(message.client.user)
-            && !message.reference; // ← المفتاح: لا نرد إذا كان الرسالة reply
-
-        const isRestricted = protection.isPersonalChatRestricted?.(message.channel) || false;
-
-        // ── الرد عند المنشن المباشر فقط
-        if (isMentionedDirectly && !isRestricted) {
-            return await _handleAIReply(message);
-        }
-
-        // ── لا ردود سياقية عشوائية (تم تعطيلها لمنع الإزعاج)
-        // handleContextualReply تعمل فقط عبر randomInteractions.checkChallenge
-
-        // ── نظام الـ XP
-        if (isPublicChannel) {
-            const now = Date.now();
-            const lastXP = xpCooldowns.get(message.author.id) || 0;
-            if (now - lastXP >= XP_COOLDOWN) {
-                xpCooldowns.set(message.author.id, now);
-                await levels.addXP(message.author.id, 5, message);
-            }
-        }
-    },
+// 20 لون متنوع
+const COLORS = {
+    red: { name: 'أحمر', hex: '#FF0000', emoji: '🔴' },
+    orange: { name: 'برتقالي', hex: '#FF8800', emoji: '🟠' },
+    yellow: { name: 'أصفر', hex: '#FFFF00', emoji: '🟡' },
+    lime: { name: 'أخضر ليموني', hex: '#88FF00', emoji: '🟢' },
+    green: { name: 'أخضر', hex: '#00FF00', emoji: '💚' },
+    cyan: { name: 'سماوي', hex: '#00FFFF', emoji: '💠' },
+    blue: { name: 'أزرق', hex: '#0088FF', emoji: '🔵' },
+    navy: { name: 'أزرق غامق', hex: '#0000FF', emoji: '💙' },
+    purple: { name: 'بنفسجي', hex: '#8800FF', emoji: '💜' },
+    magenta: { name: 'ماجنتا', hex: '#FF00FF', emoji: '🩷' },
+    pink: { name: 'وردي', hex: '#FF88FF', emoji: '🌸' },
+    brown: { name: 'بني', hex: '#8B4513', emoji: '🤎' },
+    black: { name: 'أسود', hex: '#000000', emoji: '⚫' },
+    white: { name: 'أبيض', hex: '#FFFFFF', emoji: '⚪' },
+    gold: { name: 'ذهبي', hex: '#FFD700', emoji: '🟡' },
+    silver: { name: 'فضي', hex: '#C0C0C0', emoji: '⚪' },
+    rose: { name: 'وردي فاتح', hex: '#FF69B4', emoji: '🌹' },
+    teal: { name: 'أزرق مخضر', hex: '#008080', emoji: '🩵' },
+    coral: { name: 'مرجاني', hex: '#FF7F50', emoji: '🧡' },
+    lavender: { name: 'لافندر', hex: '#E6E6FA', emoji: '💟' }
 };
 
-// ─── مساعد: بحث عن الأمر ────────────────────────────────────────────────────
-function _resolveCommand(tokens, client) {
-    for (let wordCount = Math.min(tokens.length, 4); wordCount >= 1; wordCount--) {
-        const key = tokens.slice(0, wordCount).join(' ').toLowerCase();
-        const cmd = _lookupCommand(key, client);
-        if (cmd) return { command: cmd, wordCount };
-    }
-    return { command: null, wordCount: 0 };
-}
-
-function _lookupCommand(name, client) {
-    return client.commands.get(name) ||
-        client.commands.get(client.aliases.get(name)) ||
-        null;
-}
-
-// ─── AI context cache ────────────────────────────────────────────────────────
-const _aiCtx = new Map();
-setInterval(() => _aiCtx.clear(), 15 * 60 * 1000).unref?.();
-
-function _addCtx(channelId, role, text) {
-    if (!_aiCtx.has(channelId)) _aiCtx.set(channelId, []);
-    const arr = _aiCtx.get(channelId);
-    arr.push({ role, text: text.substring(0, 200) });
-    if (arr.length > 10) arr.shift();
-}
-
-// ─── Rate Limit ──────────────────────────────────────────────────────────────
-const _aiUserCooldown = new Map();
-const AI_USER_CD = 8_000; // 8 ثوانٍ بين كل رد
-
-function _checkAIRateLimit(userId) {
-    const now = Date.now();
-    const lastCall = _aiUserCooldown.get(userId);
-    if (lastCall && (now - lastCall < AI_USER_CD)) {
-        return { allowed: false, waitSeconds: Math.ceil((AI_USER_CD - (now - lastCall)) / 1000) };
-    }
-    return { allowed: true };
-}
-
-// ─── الرد الذكي عند المنشن المباشر فقط ──────────────────────────────────
-async function _handleAIReply(message) {
-    const rateCheck = _checkAIRateLimit(message.author.id);
-    if (!rateCheck.allowed) {
-        return message.reply(`⏳ انتظر ${rateCheck.waitSeconds} ثانية...`)
-            .then(m => setTimeout(() => m.delete().catch(() => { }), 3000));
+// تفعيل نظام الألوان (للإدمن فقط)
+async function setupColors(message) {
+    if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
+        return message.reply('❌ هذا الأمر للإداريين فقط!');
     }
 
-    const userText = message.content.replace(/<@!?\d+>/g, '').trim();
-    if (!userText) {
-        const quickReplies = [
-            'منشنيتني وماسألتني شيء؟ 😒',
-            'هلا! شيش تريد؟ 👀',
-            'تعال كلمني، أنا هنا 🤖',
-        ];
-        return message.reply(quickReplies[Math.floor(Math.random() * quickReplies.length)]);
-    }
-
-    // تحديث تحدي الدردشة مع البوت
-    await dailyChallenges.updateProgress(message.author.id, 'ai_chat', 1, message).catch(() => { });
-
-    // البحث في قاعدة المعرفة أولاً
-    const knowledgeAnswer = aiBrain.lookupKnowledge(userText);
-    if (knowledgeAnswer && Math.random() > 0.3) {
-        _addCtx(message.channel.id, 'user', userText);
-        _addCtx(message.channel.id, 'bot', knowledgeAnswer);
-        return message.reply(knowledgeAnswer);
-    }
-
-    await message.channel.sendTyping().catch(() => { });
-
-    const hfToken = config.hfToken;
-    if (!hfToken || hfToken === 'your_huggingface_token_here' || hfToken.length < 10) {
-        const localReply = aiBrain.buildLocalReply(userText, message.author.id);
-        if (localReply) {
-            _addCtx(message.channel.id, 'user', userText);
-            _addCtx(message.channel.id, 'bot', localReply);
-            return message.reply(localReply);
-        }
-        const fallbacks = [
-            'وصلتني الرسالة — بفكر فيها 🧠',
-            'مو متأكد من الجواب الصح هسه 🤔',
-            'سؤال ذكي، بحتاج وقت أفكر 💭',
-        ];
-        return message.reply(fallbacks[Math.floor(Math.random() * fallbacks.length)]);
-    }
-
-    const ctx = _aiCtx.get(message.channel.id) || [];
-    const systemPrompt = aiBrain.buildSystemPrompt(
-        message.client.user.username,
-        message.guild?.name || 'السيرفر',
-        message.author.id,
-        ctx
-    );
-
-    _aiUserCooldown.set(message.author.id, Date.now());
+    const msg = await message.reply('⏳ جاري إنشاء رتب الألوان...');
 
     try {
-        const response = await axios.post(
-            'https://api-inference.huggingface.co/v1/chat/completions',
-            {
-                model: 'Qwen/Qwen2.5-7B-Instruct',
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: userText }
-                ],
-                max_tokens: 300,
-                temperature: 0.85,
-                top_p: 0.95,
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${hfToken}`,
-                    'Content-Type': 'application/json',
-                },
-                timeout: 30000,
+        let created = 0;
+        let existing = 0;
+
+        for (const [id, color] of Object.entries(COLORS)) {
+            const roleName = `🎨 ${color.name}`;
+
+            // تحقق إذا الرول موجود
+            let role = message.guild.roles.cache.find(r => r.name === roleName);
+
+            if (!role) {
+                // إنشاء الرول
+                role = await message.guild.roles.create({
+                    name: roleName,
+                    color: color.hex,
+                    permissions: [],
+                    mentionable: false,
+                    reason: 'Color role system'
+                });
+                created++;
+            } else {
+                existing++;
             }
-        );
-
-        let answer = response.data?.choices?.[0]?.message?.content?.trim() || '';
-        answer = answer.replace(/<\|im_end\|>|<\|im_start\|>|assistant|system|user/g, '').trim();
-
-        if (answer) {
-            _addCtx(message.channel.id, 'user', userText);
-            _addCtx(message.channel.id, 'bot', answer);
-            return message.reply(answer);
         }
 
-        const localReply = aiBrain.buildLocalReply(userText, message.author.id);
-        return message.reply(localReply || 'هسه ما جاني رد — جرب مرة ثانية 😅');
+        const embed = new EmbedBuilder()
+            .setColor('#00FF00')
+            .setTitle('✅ تم تفعيل نظام الألوان!')
+            .setDescription(`تم إنشاء **${created} رتبة** جديدة\nرتب موجودة: **${existing}**\n\nالآن يمكن للأعضاء استخدام \`الوان\` لاختيار ألوانهم!`)
+            .addFields({ name: '📝 ملاحظة', value: 'تأكد من وضع رتبة البوت فوق رتب الألوان في إعدادات السيرفر!' })
+            .setTimestamp();
 
-    } catch (err) {
-        console.error('[AI Reply Error]', err.response?.data || err.message);
-        if (err.response?.status === 503) {
-            return message.reply('☕ الذكاء الاصطناعي مشغول، انتظر دقيقة وجرب!');
-        }
-        const localReply = aiBrain.buildLocalReply(userText, message.author.id);
-        return message.reply(localReply || 'تعطلت هسة 😩 جرب بعدين');
+        await msg.edit({ content: null, embeds: [embed] });
+
+    } catch (error) {
+        console.error('خطأ في إنشاء الرتب:', error);
+        await msg.edit('❌ حدث خطأ! تأكد من أن البوت لديه صلاحيات إدارة الرتب.');
     }
 }
+
+// عرض الألوان (للجميع)
+async function showColors(message) {
+    const embed = new EmbedBuilder()
+        .setColor('#9B59B6')
+        .setTitle('🎨 اختر لونك المفضل!')
+        .setDescription('اضغط على الزر لتغيير لون اسمك في السيرفر\n**20 لون** متاح للاختيار!')
+        .setFooter({ text: 'يمكنك التبديل بين الألوان في أي وقت' })
+        .setTimestamp();
+
+    // صف أزرار (5x4 = 20 زر)
+    const rows = [];
+    const colorEntries = Object.entries(COLORS);
+
+    for (let i = 0; i < 4; i++) {
+        const row = new ActionRowBuilder();
+        const startIndex = i * 5;
+
+        for (let j = 0; j < 5 && (startIndex + j) < colorEntries.length; j++) {
+            const [id, color] = colorEntries[startIndex + j];
+
+            row.addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`color_${id}`)
+                    .setLabel(color.name)
+                    .setEmoji(color.emoji)
+                    .setStyle(getButtonStyle(i * 5 + j))
+            );
+        }
+
+        rows.push(row);
+    }
+
+    await message.reply({ embeds: [embed], components: rows });
+}
+
+// اختيار ستايل الزر حسب الترتيب
+function getButtonStyle(index) {
+    const styles = [
+        ButtonStyle.Danger,    // أحمر
+        ButtonStyle.Danger,    // برتقالي
+        ButtonStyle.Primary,   // أصفر
+        ButtonStyle.Success,   // أخضر ليموني
+        ButtonStyle.Success,   // أخضر
+        ButtonStyle.Primary,   // سماوي
+        ButtonStyle.Primary,   // أزرق
+        ButtonStyle.Primary,   // أزرق غامق
+        ButtonStyle.Primary,   // بنفسجي
+        ButtonStyle.Danger,    // ماجنتا
+        ButtonStyle.Danger,    // وردي
+        ButtonStyle.Secondary, // بني
+        ButtonStyle.Secondary, // أسود
+        ButtonStyle.Secondary, // أبيض
+        ButtonStyle.Primary,   // ذهبي
+        ButtonStyle.Secondary, // فضي
+        ButtonStyle.Danger,    // وردي فاتح
+        ButtonStyle.Primary,   // أزرق مخضر
+        ButtonStyle.Danger,    // مرجاني
+        ButtonStyle.Primary    // لافندر
+    ];
+    return styles[index] || ButtonStyle.Secondary;
+}
+
+// معالج الزر
+async function handleColorButton(interaction) {
+    const colorId = interaction.customId.replace('colorole_', '').replace('color_', '');
+    return assignColorRole(interaction, colorId);
+}
+
+// دالة إسناد اللون وتخليق الرتبة ديناميكياً إذا اختفت
+async function assignColorRole(interaction, identifier) {
+    // البحث عن اللون بالاسم الإنجليزي أو العربي
+    let color = COLORS[identifier];
+    if (!color) {
+        color = Object.values(COLORS).find(c => c.name === identifier || c.name.replace('🎨 ', '') === identifier);
+    }
+
+    if (!color) {
+        return interaction.reply({ content: '❌ لون غير معروف!', flags: MessageFlags.Ephemeral });
+    }
+
+    try {
+        const roleName = `🎨 ${color.name}`;
+        let role = interaction.guild.roles.cache.find(r => r.name === roleName);
+
+        if (!role) {
+            // إنشاء الرتبة تلقائياً إذا حُذفت أو لم تُنشأ من قبل
+            try {
+                role = await interaction.guild.roles.create({
+                    name: roleName,
+                    color: color.hex,
+                    permissions: [],
+                    mentionable: false,
+                    reason: 'Dynamic color role creation'
+                });
+            } catch (err) {
+                return interaction.reply({
+                    content: '❌ هذا اللون غير متاح ولم يتمكن البوت من إنشائه تلقائياً. تأكد من أن البوت لديه صلاحية إدارة الرتب.',
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+        }
+
+        // إزالة جميع الألوان السابقة للأعضاء
+        const colorRoles = interaction.member.roles.cache.filter(r => r.name.startsWith('🎨'));
+        if (colorRoles.size > 0) {
+            await interaction.member.roles.remove(colorRoles);
+        }
+
+        // إضافة اللون الجديد
+        await interaction.member.roles.add(role);
+
+        const embed = new EmbedBuilder()
+            .setColor(color.hex)
+            .setTitle(`${color.emoji} تم تغيير اللون!`)
+            .setDescription(`لونك الآن: **${color.name}**`)
+            .setFooter({ text: 'يمكنك تغيير اللون في أي وقت!' })
+            .setTimestamp();
+
+        await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+
+    } catch (error) {
+        console.error('خطأ في إسناد اللون:', error);
+        await interaction.reply({
+            content: '❌ حدث خطأ! تأكد من أن رتبة البوت فوق رتب الألوان في قائمة الرتب ولديه صلاحية إدارة الرتب.',
+            flags: MessageFlags.Ephemeral
+        });
+    }
+}
+
+// دالة لإنشاء جميع الرتب تلقائياً أثناء التفعيل الكامل
+async function createGuildColorRoles(guild) {
+    let created = 0;
+    for (const [id, color] of Object.entries(COLORS)) {
+        const roleName = `🎨 ${color.name}`;
+        let role = guild.roles.cache.find(r => r.name === roleName);
+        if (!role) {
+            await guild.roles.create({
+                name: roleName,
+                color: color.hex,
+                permissions: [],
+                mentionable: false,
+                reason: 'Color role system setup'
+            }).catch(() => {});
+            created++;
+        }
+    }
+    return created;
+}
+
+// أمر إزالة اللون
+async function removeColor(message) {
+    const colorRoles = message.member.roles.cache.filter(r => r.name.startsWith('🎨'));
+
+    if (colorRoles.size === 0) {
+        return message.reply('❌ ليس لديك لون حالياً!');
+    }
+
+    try {
+        await message.member.roles.remove(colorRoles);
+        message.reply('✅ تم إزالة اللون من حسابك!');
+    } catch (error) {
+        message.reply('❌ حدث خطأ في إزالة اللون!');
+    }
+}
+
+module.exports = {
+    // ─── واجهة الأمر المطلوبة من commandHandler ──────────────────
+    name: 'color-roles',
+    aliases: ['الوان', 'ألوان', 'لوني', 'تفعيل-الوان'],
+    description: 'نظام ألوان الأعضاء — 20 لون للاختيار',
+    usage: 'الوان | تفعيل-الوان (للإدمن)',
+
+    async execute(message, args) {
+        const sub = args[0]?.toLowerCase();
+        if (sub === 'setup' || sub === 'تفعيل') return setupColors(message);
+        if (sub === 'remove' || sub === 'ازالة') return removeColor(message);
+        return showColors(message);
+    },
+
+    // ─── export الدوال للاستخدام المباشر ────────────────────────
+    setupColors,
+    showColors,
+    handleColorButton,
+    assignColorRole,
+    createGuildColorRoles,
+    removeColor,
+    COLORS,
+};
