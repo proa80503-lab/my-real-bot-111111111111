@@ -1,7 +1,7 @@
 /**
  * ═══════════════════════════════════════════════════════════
- * 🛒 متجر السيرفر — Shop Module (نسخة مُصلَّحة)
- * تم إصلاح: ثغرة moneybag + ثغرة cooldown_reset المتكررة
+ * 🛒 متجر السيرفر — Shop Module 
+ *
  * ═══════════════════════════════════════════════════════════
  */
 
@@ -39,8 +39,8 @@ const PAGES = {
             { id: 'xp2000', name: '🌟 حزمة XP كبيرة', price: 1500, desc: '+2000 XP فوراً', multi: true },
             { id: 'daily_boost', name: '🎁 مضاعف اليومي', price: 1200, desc: 'مكافأة يومية ×2 لـ3 أيام', multi: true },
             { id: 'streak_protect', name: '🔒 حماية Streak', price: 900, desc: 'احتفظ بـ Streak لو نسيت', multi: true },
-            { id: 'bankextend', name: '🏦 توسّع البنك', price: 2000, desc: '+50,000 حد بنك (دائم)', multi: false },
-            { id: 'level_skip', name: '🚀 قفزة مستوى', price: 3000, desc: 'ارفع مستواك +1 فوراً', multi: true },
+            { id: 'bankextend', name: '🏦 توسّع البنك', price: 2000, desc: '+50,000 حد بنك (دائم)', multi: true },
+            { id: 'xp5000', name: '🚀 حزمة XP عملاقة', price: 3000, desc: '+5000 XP فوراً', multi: true },
         ]
     },
     vip: {
@@ -303,14 +303,10 @@ async function buy(interaction, itemId) {
             break;
         }
 
-        case 'level_skip': {
-            const lvl = require('../../utils/levels');
-            const progress = lvl.getLevelProgress(userId);
-            const needed = (progress.requiredXP - progress.progressXP) + 10;
-            updates.xp = (userData.xp || 0) + needed;
-            resultMsg = '🚀 مستواك ارتفع للمستوى التالي!';
+        case 'xp5000':
+            updates.xp = (userData.xp || 0) + 5000;
+            resultMsg = '🚀 تم إضافة **5000 XP** لحسابك!';
             break;
-        }
 
         case 'vip_badge':
             updates.vipBadge = true;
