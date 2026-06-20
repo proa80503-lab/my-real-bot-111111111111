@@ -1,5 +1,6 @@
 const { PermissionFlagsBits } = require('discord.js');
-const { PremiumEmbedBuilder, ICONS } = require('../../utils/embed-builder');
+const { PremiumEmbedBuilder } = require('../../utils/embed-builder');
+const { hasPermOrOwner, getAuthor } = require('../../utils/permissions');
 
 module.exports = {
     name: 'unjail',
@@ -8,24 +9,38 @@ module.exports = {
     usage: 'unjail @user',
     permissions: [PermissionFlagsBits.ModerateMembers],
 
-    async execute(message, args) {
-        const target = message.mentions.members.first();
-        const db = require('../../utils/database');
-        const guildData = db.getGuildData(message.guild.id);
-        let jailRole = guildData.jailRole ? message.guild.roles.cache.get(guildData.jailRole) : null;
-        if (!jailRole) jailRole = message.guild.roles.cache.find(r => r.name === '🔒┃سجين' || r.name === 'Jailed' || r.name === 'مسجون');
+    async execute(context, args) {
+        const isInteraction = context.isCommand?.() || context.isButton?.();
+        const author = getAuthor(context);
 
-        if (!target) return message.reply('❌ منشن الشخص!');
-        if (!jailRole) return message.reply('❌ رتبة السجن غير موجودة!');
+        // صاحب البوت يتخطى فحص الصلاحيات
+        if (!hasPermOrOwner(context.member, PermissionFlagsBits.ModerateMembers)) {
+            const msg = '❌ ليس لديك صلاحية لفك السجن!';
+            return isInteraction ? context.reply({ content: msg, ephemeral: true }) : context.reply(msg);
+        }
+
+        const target = context.mentions?.members?.first() || (isInteraction ? context.options?.getMember('user') : null);
+        const db = require('../../utils/database');
+        const guildData = db.getGuildData(context.guild.id);
+        let jailRole = guildData.jailRole ? context.guild.roles.cache.get(guildData.jailRole) : null;
+        if (!jailRole) jailRole = context.guild.roles.cache.find(r => r.name === '🔒┃سجين' || r.name === 'Jailed' || r.name === 'مسجون');
+
+        if (!target) {
+            return isInteraction ? context.reply({ content: '❌ منشن الشخص!', ephemeral: true }) : context.reply('❌ منشن الشخص!');
+        }
+        if (!jailRole) {
+            return isInteraction ? context.reply({ content: '❌ رتبة السجن غير موجودة!', ephemeral: true }) : context.reply('❌ رتبة السجن غير موجودة!');
+        }
 
         await target.roles.remove(jailRole);
 
         const embed = PremiumEmbedBuilder.success(
             '⚖️ إفراج',
-            `تم فك السجن عن **${target.user.tag}** بنجاح.`,
+            `تم فك السجن عن **${target.user.username}** بنجاح.`,
             []
         );
 
-        message.reply({ embeds: [embed] });
+        if (isInteraction) await context.reply({ embeds: [embed] });
+        else context.reply({ embeds: [embed] });
     }
 };
