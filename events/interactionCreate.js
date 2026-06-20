@@ -109,13 +109,14 @@ module.exports = {
                 // 🎨 Color buttons (from setup colors embed)
                 else if (id.startsWith('color_btn_')) {
                     const colorName = id.replace('color_btn_', '');
-                    try {
-                        const colorRoles = require('../commands/moderation/color-roles');
-                        // Simulate a message-like call
-                        await colorRoles.applyColorByName(interaction, colorName);
-                    } catch (e) {
-                        await interaction.reply({ content: `🎨 لتغيير اللون اكتب: \`لون ${colorName}\``, flags: MessageFlags.Ephemeral });
-                    }
+                    const colorRoles = require('../commands/moderation/color-roles');
+                    await colorRoles.assignColorRole(interaction, colorName);
+                }
+                // Color command buttons (from the الوان command)
+                else if (id.startsWith('color_') && !id.startsWith('colorole_')) {
+                    const colorName = id.replace('color_', '');
+                    const colorRoles = require('../commands/moderation/color-roles');
+                    await colorRoles.assignColorRole(interaction, colorName);
                 }
                 // ✅ Server Setup confirm/cancel
                 else if (id === 'setup_confirm' || id === 'setup_cancel') {

@@ -21,12 +21,13 @@ module.exports = {
 
         const msg = await message.reply({ embeds: [embed] });
 
-        const filter = m => m.author?.id === message.author.id && m.content.length === 1;
+        const userId = message.author?.id || message.user?.id;
+        const filter = m => m.author?.id === userId && m.content.length === 1;
         const collector = message.channel.createMessageCollector({ filter, time: 60000 });
 
         collector.on('collect', m => {
             const char = m.content.toLowerCase();
-            if (guessed.has(char)) return m.reply('❌ خمنت هذا الحرف مسبقاً!');
+            if (guessed.has(char)) return m.reply('❌ خمنت هذا الحرف مسبقاً!').catch(() => {});
             guessed.add(char);
 
             if (word.includes(char)) {
@@ -35,7 +36,7 @@ module.exports = {
                     collector.stop('win');
                 } else {
                     embed.setDescription(`الكلمة: \`${display}\`\nالمحاولات المتبقية: **${attempts}**`);
-                    msg.edit({ embeds: [embed] });
+                    msg.edit({ embeds: [embed] }).catch(() => {});
                 }
             } else {
                 attempts--;
@@ -43,15 +44,16 @@ module.exports = {
                     collector.stop('lose');
                 } else {
                     embed.setDescription(`الكلمة: \`${display}\`\nالمحاولات المتبقية: **${attempts}**`);
-                    msg.edit({ embeds: [embed] });
+                    msg.edit({ embeds: [embed] }).catch(() => {});
                 }
             }
         });
 
         collector.on('end', (collected, reason) => {
-            if (reason === 'win') message.reply(`🎉 مبروك! لقد فزت، الكلمة كانت **${word}**.`);
-            else if (reason === 'lose') message.reply(`💀 للأسف خسرت! الكلمة كانت **${word}**.`);
-            else message.reply('⏰ انتهى الوقت.');
+            const ping = `<@${userId}>`;
+            if (reason === 'win') message.channel.send(`🎉 مبروك ${ping}! لقد فزت، الكلمة كانت **${word}**.`);
+            else if (reason === 'lose') message.channel.send(`💀 للأسف خسرت ${ping}! الكلمة كانت **${word}**.`);
+            else message.channel.send(`⏰ انتهى الوقت ${ping}.`);
         });
     }
 };

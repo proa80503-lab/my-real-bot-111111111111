@@ -14,16 +14,24 @@ module.exports = {
 
         const target = context.mentions?.members?.first() || (isInteraction ? context.options?.getMember('user') : null);
         const reason = args.slice(1).join(' ') || 'بدون سبب';
-        const jailRole = context.guild.roles.cache.find(r => r.name === 'Jailed' || r.name === 'مسجون');
+        const db = require('../../utils/database');
+        const guildData = db.getGuildData(context.guild.id);
+        let jailRole = guildData.jailRole ? context.guild.roles.cache.get(guildData.jailRole) : null;
+        if (!jailRole) jailRole = context.guild.roles.cache.find(r => r.name === '🔒┃سجين' || r.name === 'Jailed' || r.name === 'مسجون');
 
         if (!target) return context.reply('❌ منشن الشخص!');
         if (!jailRole) return context.reply('❌ رتبة السجن غير موجودة! استخدم `!setup` أولاً.');
 
         await target.roles.add(jailRole, reason);
 
+        // طرد من الروم الصوتي إذا كان متصلاً
+        if (target.voice?.channel) {
+            await target.voice.disconnect(reason).catch(() => {});
+        }
+
         const embed = PremiumEmbedBuilder.moderation(
             '⚖️ سجن عضو',
-            `تم إرسال **${target.user.tag}** إلى السجن.`,
+            `تم إرسال العبد **${target.user.tag}** إلى السجن.`,
             [{ name: '📝 السبب', value: reason }],
             author
         );

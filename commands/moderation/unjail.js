@@ -10,7 +10,10 @@ module.exports = {
 
     async execute(message, args) {
         const target = message.mentions.members.first();
-        const jailRole = message.guild.roles.cache.find(r => r.name === 'Jailed' || r.name === 'مسجون');
+        const db = require('../../utils/database');
+        const guildData = db.getGuildData(message.guild.id);
+        let jailRole = guildData.jailRole ? message.guild.roles.cache.get(guildData.jailRole) : null;
+        if (!jailRole) jailRole = message.guild.roles.cache.find(r => r.name === '🔒┃سجين' || r.name === 'Jailed' || r.name === 'مسجون');
 
         if (!target) return message.reply('❌ منشن الشخص!');
         if (!jailRole) return message.reply('❌ رتبة السجن غير موجودة!');

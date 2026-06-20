@@ -137,7 +137,16 @@ function getButtonStyle(index) {
 // معالج الزر
 async function handleColorButton(interaction) {
     const colorId = interaction.customId.replace('colorole_', '').replace('color_', '');
-    const color = COLORS[colorId];
+    return assignColorRole(interaction, colorId);
+}
+
+// دالة إسناد اللون وتخليق الرتبة ديناميكياً إذا اختفت
+async function assignColorRole(interaction, identifier) {
+    // البحث عن اللون بالاسم الإنجليزي أو العربي
+    let color = COLORS[identifier];
+    if (!color) {
+        color = Object.values(COLORS).find(c => c.name === identifier || c.name.replace('🎨 ', '') === identifier);
+    }
 
     if (!color) {
         return interaction.reply({ content: '❌ لون غير معروف!', flags: MessageFlags.Ephemeral });
@@ -145,16 +154,27 @@ async function handleColorButton(interaction) {
 
     try {
         const roleName = `🎨 ${color.name}`;
-        const role = interaction.guild.roles.cache.find(r => r.name === roleName);
+        let role = interaction.guild.roles.cache.find(r => r.name === roleName);
 
         if (!role) {
-            return interaction.reply({
-                content: '❌ هذا اللون غير متاح! اطلب من الإدمن تفعيل الألوان: `تفعيل الوان`',
-                flags: MessageFlags.Ephemeral
-            });
+            // إنشاء الرتبة تلقائياً إذا حُذفت أو لم تُنشأ من قبل
+            try {
+                role = await interaction.guild.roles.create({
+                    name: roleName,
+                    color: color.hex,
+                    permissions: [],
+                    mentionable: false,
+                    reason: 'Dynamic color role creation'
+                });
+            } catch (err) {
+                return interaction.reply({
+                    content: '❌ هذا اللون غير متاح ولم يتمكن البوت من إنشائه تلقائياً. تأكد من أن البوت لديه صلاحية إدارة الرتب.',
+                    flags: MessageFlags.Ephemeral
+                });
+            }
         }
 
-        // إزالة جميع ألوان أخرى
+        // إزالة جميع الألوان السابقة للأعضاء
         const colorRoles = interaction.member.roles.cache.filter(r => r.name.startsWith('🎨'));
         if (colorRoles.size > 0) {
             await interaction.member.roles.remove(colorRoles);
@@ -173,12 +193,32 @@ async function handleColorButton(interaction) {
         await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 
     } catch (error) {
-        console.error('خطأ في تغيير اللون:', error);
+        console.error('خطأ في إسناد اللون:', error);
         await interaction.reply({
-            content: '❌ حدث خطأ! تأكد من أن رتبة البوت فوق رتب الألوان.',
+            content: '❌ حدث خطأ! تأكد من أن رتبة البوت فوق رتب الألوان في قائمة الرتب ولديه صلاحية إدارة الرتب.',
             flags: MessageFlags.Ephemeral
         });
     }
+}
+
+// دالة لإنشاء جميع الرتب تلقائياً أثناء التفعيل الكامل
+async function createGuildColorRoles(guild) {
+    let created = 0;
+    for (const [id, color] of Object.entries(COLORS)) {
+        const roleName = `🎨 ${color.name}`;
+        let role = guild.roles.cache.find(r => r.name === roleName);
+        if (!role) {
+            await guild.roles.create({
+                name: roleName,
+                color: color.hex,
+                permissions: [],
+                mentionable: false,
+                reason: 'Color role system setup'
+            }).catch(() => {});
+            created++;
+        }
+    }
+    return created;
 }
 
 // أمر إزالة اللون
@@ -215,6 +255,8 @@ module.exports = {
     setupColors,
     showColors,
     handleColorButton,
+    assignColorRole,
+    createGuildColorRoles,
     removeColor,
     COLORS,
 };

@@ -951,6 +951,12 @@ async function buildServer(guild, progressMsg, isReset = false) {
 
     // نشر دليل الألوان
     if (channelRefs['post_colors']) {
+        try {
+            const colorRoles = require('./color-roles');
+            await colorRoles.createGuildColorRoles(guild);
+        } catch (err) {
+            console.error('[ServerSetup] خطأ في إنشاء رتب الألوان:', err.message);
+        }
         await postColorsGuide(guild, channelRefs['post_colors']);
     }
 
@@ -987,7 +993,7 @@ function _sleep(ms) {
 // ─── تصدير الوحدة ────────────────────────────────────────────────────────────
 module.exports = {
     name: 'server-setup',
-    aliases: ['تفعيل', 'اعادة تفعيل', 'اعادة-تفعيل', 'setup-server', 'reset-server', 'بناء-سيرفر'],
+    aliases: ['تفعيل-سيرفر', 'تفعيل سيرفر', 'اعادة تفعيل سيرفر', 'setup-server', 'reset-server', 'بناء-سيرفر'],
     description: 'بناء وإعداد السيرفر بالكامل',
     permissions: [PermissionFlagsBits.Administrator],
     category: 'إدارة',
