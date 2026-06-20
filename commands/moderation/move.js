@@ -1,14 +1,16 @@
 const { EmbedBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
+const { isOwner } = require('../../utils/permissions');
 
 module.exports = {
     name: 'move',
     aliases: ['pull', 'اسحب', 'نقل', 'mv', 'bring'],
     description: 'نقل الأعضاء إلى الروم الصوتي الخاص بك (استخدم: !اسحب)',
-    usage: '!mph move <all/half/@user>',
+    usage: '!move <all/half/@user>',
+    permissions: [PermissionFlagsBits.MoveMembers],
 
     async execute(message, args) {
-        // 1. Check Permissions
-        if (!message.member.permissions.has(PermissionFlagsBits.MoveMembers)) {
+        // 1. فحص الصلاحيات (صاحب البوت يتخطى)
+        if (!isOwner(message.author.id) && !message.member.permissions.has(PermissionFlagsBits.MoveMembers)) {
             return message.reply({
                 content: '❌ **ليس لديك صلاحية نقل الأعضاء (Move Members)!**',
                 ephemeral: true
