@@ -1,5 +1,6 @@
 const { PermissionFlagsBits } = require('discord.js');
-const { PremiumEmbedBuilder, ICONS } = require('../../utils/embed-builder');
+const { PremiumEmbedBuilder } = require('../../utils/embed-builder');
+const { hasPermOrOwner, getAuthor } = require('../../utils/permissions');
 
 module.exports = {
     name: 'unmute',
@@ -8,20 +9,34 @@ module.exports = {
     usage: 'unmute @user',
     permissions: [PermissionFlagsBits.ModerateMembers],
 
-    async execute(message, args) {
-        const target = message.mentions.members.first();
+    async execute(context, args) {
+        const isInteraction = context.isCommand?.() || context.isButton?.();
+        const author = getAuthor(context);
 
-        if (!target) return message.reply('❌ يرجى منشن العضو!');
-        if (!target.isCommunicationDisabled()) return message.reply('❌ هذا العضو غير مكتوم بالفعل!');
+        // صاحب البوت يتخطى فحص الصلاحيات
+        if (!hasPermOrOwner(context.member, PermissionFlagsBits.ModerateMembers)) {
+            const msg = '❌ ليس لديك صلاحية لفك الكتم!';
+            return isInteraction ? context.reply({ content: msg, ephemeral: true }) : context.reply(msg);
+        }
 
-        await target.timeout(null, `تم فك الكتم بواسطة ${message.author.tag}`);
+        const target = context.mentions?.members?.first() || (isInteraction ? context.options?.getMember('user') : null);
+
+        if (!target) {
+            return isInteraction ? context.reply({ content: '❌ يرجى منشن العضو!', ephemeral: true }) : context.reply('❌ يرجى منشن العضو!');
+        }
+        if (!target.isCommunicationDisabled()) {
+            return isInteraction ? context.reply({ content: '❌ هذا العضو غير مكتوم بالفعل!', ephemeral: true }) : context.reply('❌ هذا العضو غير مكتوم بالفعل!');
+        }
+
+        await target.timeout(null, `تم فك الكتم بواسطة ${author.username}`);
 
         const embed = PremiumEmbedBuilder.success(
             '🔊 فك الكتم',
-            `تم فك الكتم عن **${target.user.tag}** بنجاح.`,
+            `تم فك الكتم عن **${target.user.username}** بنجاح.`,
             []
         );
 
-        message.reply({ embeds: [embed] });
+        if (isInteraction) await context.reply({ embeds: [embed] });
+        else context.reply({ embeds: [embed] });
     }
 };
