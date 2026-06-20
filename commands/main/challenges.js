@@ -11,7 +11,7 @@ const dailyChallenges = require('../../utils/daily-challenges');
 
 module.exports = {
     name: 'challenges',
-    aliases: ['تحديات', 'تحدياتي', 'daily-challenges'],
+    aliases: ['تحديات', 'تحدياتي'],
     description: 'عرض التحديات اليومية وتقدمك',
     category: 'عام',
 
