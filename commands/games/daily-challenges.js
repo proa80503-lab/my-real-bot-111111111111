@@ -17,8 +17,8 @@ class DailyChallengeSystem {
             { id: 'win_games', type: 'games', target: 5, reward: 3500, title: 'المنتصر', desc: 'اربح {target} ألعاب', emoji: '🏆' },
             { id: 'trivia_correct', type: 'games', target: 3, reward: 2000, title: 'العبقري', desc: 'أجب صحيحاً على {target} أسئلة', emoji: '🧠' },
 
-            // مهام اجتماعيةconst message = { reply: (msg) => interaction.update(msg), client: interaction.client, author: interaction.user, guild: interaction.guild };
-            { id: 'send_messages', type: 'social', target: 50, reward: 1000, title: 'الثرثار', desc: 'أرسل {target} رسالة', emoji: '💬' },
+            // مهام اجتماعية
+            { id: 'messages', type: 'social', target: 50, reward: 1000, title: 'الثرثار', desc: 'أرسل {target} رسالة', emoji: '💬' },
             { id: 'help_others', type: 'social', target: 3, reward: 2500, title: 'المساعد', desc: 'ساعد {target} أشخاص', emoji: '🤝' },
             { id: 'voice_time', type: 'social', target: 60, reward: 2000, title: 'المتحدث', desc: 'ابقَ في الفويس {target} دقيقة', emoji: '🎙️' },
 
@@ -235,7 +235,7 @@ async function handleChallengeButton(interaction) {
 module.exports = {
     // ─── واجهة الأمر المطلوبة من commandHandler ──────────────────
     name: 'daily-challenges',
-    aliases: ['تحديات', 'مهام-يومية'],
+    aliases: ['مهام-يومية', 'تحديات-العاب'],
     description: 'عرض المهام اليومية والمطالبة بمكافآتها',
     usage: 'daily-challenges',
 
