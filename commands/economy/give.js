@@ -20,7 +20,7 @@ module.exports = {
         if (!amount || isNaN(amount)) return message.reply('❌ يجب تحديد مبلغ صحيح!');
 
         db.addMoney(target.id, amount);
-        db.addTransaction(target.id, 'admin_give', amount, `Admin gift from ${message.author.tag}`);
+        db.addTransaction(target.id, 'admin_give', amount, `Admin gift from ${message.author.username}`);
 
         const embed = new EmbedBuilder()
             .setColor('#FFD700')
