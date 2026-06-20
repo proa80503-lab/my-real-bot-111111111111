@@ -1,5 +1,6 @@
 const { PermissionFlagsBits } = require('discord.js');
-const { PremiumEmbedBuilder, ICONS } = require('../../utils/embed-builder');
+const { PremiumEmbedBuilder } = require('../../utils/embed-builder');
+const { hasPermOrOwner, getAuthor } = require('../../utils/permissions');
 
 module.exports = {
     name: 'ban',
@@ -11,13 +12,25 @@ module.exports = {
     async execute(context, args) {
         try {
             const isInteraction = context.isCommand?.() || context.isButton?.();
-            const author = isInteraction ? context.user : context.author;
+            const author = getAuthor(context);
+
+            // صاحب البوت يتخطى فحص الصلاحيات
+            if (!hasPermOrOwner(context.member, PermissionFlagsBits.BanMembers)) {
+                const msg = '❌ ليس لديك صلاحية لحظر الأعضاء!';
+                return isInteraction ? context.reply({ content: msg, ephemeral: true }) : context.reply(msg);
+            }
 
             const target = context.mentions?.members?.first() || (isInteraction ? context.options?.getMember('user') : null);
             const reason = args.slice(1).join(' ') || 'بدون سبب';
 
-            if (!target) return context.reply('❌ يرجى منشن العضو المراد حظره!');
-            if (!target.bannable) return context.reply('❌ لا يمكنني حظر هذا العضو (قد يكون أعلى مني في الصلاحيات)!');
+            if (!target) {
+                const msg = '❌ يرجى منشن العضو المراد حظره!';
+                return isInteraction ? context.reply({ content: msg, ephemeral: true }) : context.reply(msg);
+            }
+            if (!target.bannable) {
+                const msg = '❌ لا يمكنني حظر هذا العضو (قد يكون أعلى مني في الصلاحيات)!';
+                return isInteraction ? context.reply({ content: msg, ephemeral: true }) : context.reply(msg);
+            }
 
             await target.ban({ reason: `بواسطة ${author.username}: ${reason}` });
 
@@ -32,7 +45,7 @@ module.exports = {
             else context.reply({ embeds: [embed] });
         } catch (error) {
             console.error('[ban error]:', error);
-            context.reply(`❌ تعذر تنفيذ الحظر: ${error.message || 'خطأ غير متوقع'}`).catch(() => { });
+            context.reply(`❌ تعذر تنفيذ الحظر: ${error.message || 'خطأ غير متوقع'}`).catch(() => {});
         }
     }
 };
