@@ -8,6 +8,7 @@ const levels = require('../utils/levels');
 const protection = require('../utils/protection');
 const securityMonitor = require('../utils/security-monitor');
 const chatLearner = require('../utils/chat-learner');
+const { isOwner } = require('../utils/permissions');
 const randomInteractions = require('../utils/random-interactions');
 const aiBrain = require('../utils/ai-brain');
 const dailyChallenges = require('../utils/daily-challenges');
@@ -280,6 +281,7 @@ module.exports = {
                     return message.reply('❌ هذا الأمر للمالك فقط!').catch(() => { });
                 }
                 if (command.permissions && message.member &&
+                    !isOwner(message.author.id) &&
                     !message.member.permissions.has(command.permissions)) {
                     return message.reply('❌ ليس لديك صلاحية لاستخدام هذا الأمر!');
                 }
