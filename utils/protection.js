@@ -12,7 +12,7 @@ const SPAM_TIME = 5000; // في 5 ثوان
 async function checkSpam(message) {
     if (message.author.bot) return false;
     if (!message.guild) return false; // تجاهل الرسائل الخاصة
-    if (message.member.permissions.has(PermissionFlagsBits.Administrator)) return false;
+    if (!message.member || message.member.permissions.has(PermissionFlagsBits.Administrator)) return false;
 
     const userId = message.author.id;
     const now = Date.now();
@@ -76,7 +76,7 @@ const badWordRegexes = badWords.map(createBadWordRegex);
 async function checkBadWords(message) {
     if (message.author.bot) return false;
     if (!message.guild) return false; // تجاهل الرسائل الخاصة
-    if (message.member.permissions.has(PermissionFlagsBits.Administrator)) return false;
+    if (!message.member || message.member.permissions.has(PermissionFlagsBits.Administrator)) return false;
 
     const content = message.content.toLowerCase();
     const normalizedContent = content.replace(/[ًٌٍَُِّْ]/g, '');
@@ -184,7 +184,7 @@ async function checkRaid(member) {
 async function checkLinks(message) {
     if (message.author.bot) return false;
     if (!message.guild) return false;
-    if (message.member.permissions.has(PermissionFlagsBits.Administrator)) return false;
+    if (!message.member || message.member.permissions.has(PermissionFlagsBits.Administrator)) return false;
 
     const linkPatterns = [
         /discord\.gg\/\w+/gi,
@@ -221,7 +221,7 @@ async function checkLinks(message) {
 async function checkCaps(message) {
     if (message.author.bot) return false;
     if (!message.guild) return false;
-    if (message.member.permissions.has(PermissionFlagsBits.Administrator)) return false;
+    if (!message.member || message.member.permissions.has(PermissionFlagsBits.Administrator)) return false;
     if (message.content.length < 10) return false;
 
     const capsCount = (message.content.match(/[A-Z]/g) || []).length;
@@ -258,7 +258,7 @@ async function checkCaps(message) {
 async function checkMentionSpam(message) {
     if (message.author.bot) return false;
     if (!message.guild) return false;
-    if (message.member.permissions.has(PermissionFlagsBits.Administrator)) return false;
+    if (!message.member || message.member.permissions.has(PermissionFlagsBits.Administrator)) return false;
 
     const mentions = message.mentions.users.size + message.mentions.roles.size;
 
@@ -292,7 +292,7 @@ async function checkMentionSpam(message) {
 async function checkEmojiSpam(message) {
     if (message.author.bot) return false;
     if (!message.guild) return false;
-    if (message.member.permissions.has(PermissionFlagsBits.Administrator)) return false;
+    if (!message.member || message.member.permissions.has(PermissionFlagsBits.Administrator)) return false;
 
     const emojiCount = (message.content.match(/<a?:\w+:\d+>|[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}]/gu) || []).length;
 
@@ -374,7 +374,7 @@ _cleanup.unref?.();
 
 async function checkDuplicateMessages(message) {
     if (!message.guild) return false;
-    if (message.member.permissions.has(PermissionFlagsBits.Administrator)) return false;
+    if (!message.member || message.member.permissions.has(PermissionFlagsBits.Administrator)) return false;
 
     const userId = message.author.id;
     const messageContent = message.content.toLowerCase().trim();
@@ -459,7 +459,7 @@ function addCustomRule(guildId, rule) {
 
 async function checkCustomRules(message) {
     if (!message.guild) return false;
-    if (message.member.permissions.has(PermissionFlagsBits.Administrator)) return false;
+    if (!message.member || message.member.permissions.has(PermissionFlagsBits.Administrator)) return false;
 
     const guildRules = customRules.get(message.guild.id) || [];
 
