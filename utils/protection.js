@@ -58,7 +58,20 @@ async function checkSpam(message) {
 }
 
 // نظام Auto-Mod للكلمات السيئة
-const badWords = ['كلب', 'حمار', 'غبي', 'احمق', 'قحبة', 'كس', 'عير', 'عير بكس اختك', 'عير بامك'];
+const badWords = [
+    'كلب', 'حمار', 'غبي', 'احمق', 'قحبة', 'كس', 'عير', 'زب',
+    'شرموطة', 'منيوك', 'قحبه', 'كسك', 'بكس', 'بكسك', 'كسي',
+    'زبك', 'زبي', 'قحبتي', 'قحبتك', 'شرموطه', 'قحاب', 'شراميط',
+    'عير بكس اختك', 'عير بامك'
+];
+
+function createBadWordRegex(word) {
+    const chars = word.split('').map(c => c === ' ' ? '\\s+' : (c.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&') + '+'));
+    const pattern = chars.join('[\\sـ]*');
+    return new RegExp(`(^|[^\\u0600-\\u06FFa-zA-Z0-9_])(${pattern})(?=$|[^\\u0600-\\u06FFa-zA-Z0-9_])`, 'i');
+}
+
+const badWordRegexes = badWords.map(createBadWordRegex);
 
 async function checkBadWords(message) {
     if (message.author.bot) return false;
@@ -66,22 +79,9 @@ async function checkBadWords(message) {
     if (message.member.permissions.has(PermissionFlagsBits.Administrator)) return false;
 
     const content = message.content.toLowerCase();
+    const normalizedContent = content.replace(/[ًٌٍَُِّْ]/g, '');
 
-    const hasBadWord = badWords.some(word => {
-        // تحديث الريجيكس ليدعم الأحرف العربية كأحرف كلمات وليس فواصل
-        // نستخدم lookbehind و lookahead للتأكد أن ما حول الكلمة ليس حرفاً عربياً أو إنجليزياً
-        // ملاحظة: Lookbehind قد لا يكون مدعوماً في كل بيئات Node القديمة، لذا نستخدم بديل أمن
-        // البطانة: (بداية النص أو حرف غير أبجدي) + الكلمة + (نهاية النص أو حرف غير أبجدي)
-        // الأحرف الأبجدية تشمل العربية [^\u0600-\u06FFa-zA-Z0-9_]
-
-        // ال pattern الجديد:
-        // نتحقق أن الحرف السابق ليس حرفاً عربياً/لاتينياً
-        // ونتحقق أن الحرف التالي ليس حرفاً عربياً/لاتينياً
-
-        const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(`(^|[^\\u0600-\\u06FFa-zA-Z0-9_])${escapedWord}(?=$|[^\\u0600-\\u06FFa-zA-Z0-9_])`, 'i');
-        return regex.test(content);
-    });
+    const hasBadWord = badWordRegexes.some(regex => regex.test(normalizedContent));
 
     if (hasBadWord) {
         try {

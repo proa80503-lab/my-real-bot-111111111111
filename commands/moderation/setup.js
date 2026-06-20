@@ -34,47 +34,57 @@ module.exports = {
 
         // ─── إنشاء الرتب ────────────────────────────────────────
         const rolesToCreate = [
-            { key: 'jailRole', name: config.jailRoleName || '🔒┃سجين', color: '#FF0000', perms: [], deny: [PermissionFlagsBits.SendMessages, PermissionFlagsBits.Speak] },
-            { key: 'muteRole', name: config.muteRoleName || '🔇┃مكتوم', color: '#808080', perms: [], deny: [PermissionFlagsBits.SendMessages] },
+            { key: 'jailRole', name: config.jailRoleName || '🔒┃سجين', color: '#000000', perms: [], deny: ['SendMessages', 'Speak', 'ViewChannel'] },
+            { key: 'muteRole', name: config.muteRoleName || '🔇┃مكتوم', color: '#808080', perms: [], deny: ['SendMessages'] },
         ];
 
         for (const roleDef of rolesToCreate) {
             try {
                 const existing = guild.roles.cache.find(r => r.name === roleDef.name);
+                let role = existing;
                 if (existing) {
-                    results.skipped.push(`🔄 رتبة **${roleDef.name}** موجودة مسبقاً`);
+                    results.skipped.push(`🔄 رتبة **${roleDef.name}** موجودة مسبقاً (تم تحديث صلاحياتها)`);
                     if (!db.getGuildData(guild.id)[roleDef.key]) {
                         db.updateGuildData(guild.id, { [roleDef.key]: existing.id });
                     }
-                    continue;
+                } else {
+                    role = await guild.roles.create({
+                        name: roleDef.name,
+                        color: roleDef.color,
+                        reason: 'إعداد تلقائي بواسطة البوت'
+                    });
+                    db.updateGuildData(guild.id, { [roleDef.key]: role.id });
+                    results.success.push(`✅ تم إنشاء رتبة **${roleDef.name}**`);
                 }
-                const role = await guild.roles.create({
-                    name: roleDef.name,
-                    color: roleDef.color,
-                    reason: 'إعداد تلقائي بواسطة البوت'
-                });
-                db.updateGuildData(guild.id, { [roleDef.key]: role.id });
 
-                // منع الكتابة في كل القنوات لهذه الرتبة
+                // منع الكتابة/الرؤية في كل القنوات لهذه الرتبة
                 for (const channel of guild.channels.cache.values()) {
                     if (channel.isTextBased() || channel.isVoiceBased()) {
-                        await channel.permissionOverwrites.create(role, Object.fromEntries(roleDef.deny.map(p => [p, false]))).catch(() => { });
+                        if (roleDef.key === 'jailRole' && (channel.name.includes('سجن') || channel.name.includes('jail'))) continue;
+                        await channel.permissionOverwrites.edit(role.id, Object.fromEntries(roleDef.deny.map(p => [p, false]))).catch(() => { });
                     }
                 }
-                results.success.push(`✅ تم إنشاء رتبة **${roleDef.name}**`);
             } catch (e) {
-                results.failed.push(`❌ فشل إنشاء رتبة **${roleDef.name}**: ${e.message}`);
+                results.failed.push(`❌ فشل إنشاء/تعديل رتبة **${roleDef.name}**: ${e.message}`);
             }
         }
 
         // ─── إنشاء القنوات ───────────────────────────────────────
         const channelsToCreate = [
             {
+                key: 'jailChannel',
+                name: '🔒┃السجن',
+                type: ChannelType.GuildText,
+                perms: [
+                    { id: guild.roles.everyone.id, deny: ['ViewChannel'] }
+                ]
+            },
+            {
                 key: 'logChannel',
                 name: config.logChannelName || '📝┃السجلات',
                 type: ChannelType.GuildText,
                 perms: [
-                    { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.SendMessages] }
+                    { id: guild.roles.everyone.id, deny: ['SendMessages'] } // changed to string
                 ]
             },
             {
@@ -82,7 +92,7 @@ module.exports = {
                 name: config.punishmentsChannelName || '⚖️┃العقوبات',
                 type: ChannelType.GuildText,
                 perms: [
-                    { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.SendMessages] }
+                    { id: guild.roles.everyone.id, deny: ['SendMessages'] } // changed to string
                 ]
             },
             {
@@ -102,8 +112,8 @@ module.exports = {
                 name: '🏢・الشركات',
                 type: ChannelType.GuildText,
                 perms: [
-                    { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.SendMessages, PermissionFlagsBits.AddReactions] },
-                    { id: guild.members.me.id, allow: [PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageMessages] }
+                    { id: guild.roles.everyone.id, deny: ['SendMessages', 'AddReactions'] },
+                    { id: guild.members.me.id, allow: ['SendMessages', 'ManageMessages'] }
                 ]
             }
         ];
@@ -139,6 +149,21 @@ module.exports = {
                 results.failed.push(`❌ فشل إنشاء قناة **${chDef.name}**: ${e.message}`);
             }
         }
+
+        // إعطاء السجين صلاحية الرؤية لروم السجن
+        try {
+            const guildData = db.getGuildData(guild.id);
+            if (guildData.jailRole) {
+                let jailChannel = guild.channels.cache.find(c => c.name.includes('سجن') || c.name.includes('jail'));
+                if (jailChannel) {
+                    await jailChannel.permissionOverwrites.edit(guildData.jailRole, {
+                        ViewChannel: true,
+                        ReadMessageHistory: true,
+                        SendMessages: false
+                    }).catch(() => {});
+                }
+            }
+        } catch (e) {}
 
         // ─── وضع علامة اكتمال الإعداد ────────────────────────────
         db.updateGuildData(guild.id, { setupComplete: true });
