@@ -1,5 +1,6 @@
 const { PermissionFlagsBits } = require('discord.js');
-const { PremiumEmbedBuilder, ICONS } = require('../../utils/embed-builder');
+const { PremiumEmbedBuilder } = require('../../utils/embed-builder');
+const { hasPermOrOwner, getAuthor } = require('../../utils/permissions');
 
 module.exports = {
     name: 'unlock',
@@ -10,7 +11,13 @@ module.exports = {
 
     async execute(context) {
         const isInteraction = context.isCommand?.() || context.isButton?.();
-        const author = isInteraction ? context.user : context.author;
+        const author = getAuthor(context);
+
+        // صاحب البوت يتخطى فحص الصلاحيات
+        if (!hasPermOrOwner(context.member, PermissionFlagsBits.ManageChannels)) {
+            const msg = '❌ ليس لديك صلاحية فتح القنوات!';
+            return isInteraction ? context.reply({ content: msg, ephemeral: true }) : context.reply(msg);
+        }
 
         await context.channel.permissionOverwrites.edit(context.guild.id, {
             SendMessages: true
