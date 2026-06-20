@@ -2,6 +2,7 @@
 
 const { PermissionFlagsBits } = require('discord.js');
 const securityMonitor = require('../../utils/security-monitor');
+const { isOwner } = require('../../utils/permissions');
 
 module.exports = {
     name: 'إغلاق-السيرفر',
@@ -11,7 +12,9 @@ module.exports = {
 
     async execute(message, args) {
         if (!message.guild) return;
-        if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
+
+        // صاحب البوت يتخطى فحص الصلاحيات
+        if (!isOwner(message.author.id) && !message.member.permissions.has(PermissionFlagsBits.Administrator)) {
             return message.reply('❌ هذا الأمر يحتاج صلاحية Administrator!');
         }
 
