@@ -1,19 +1,22 @@
 const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const db = require('../../utils/database');
 const { sendPunishmentToChannel } = require('../../utils/punishments');
+const { isOwner, hasPermOrOwner, getAuthor } = require('../../utils/permissions');
 
 module.exports = {
     name: 'warn',
     aliases: ['تحذير', 'انذار'],
     description: 'تحذير عضو في السيرفر',
     usage: 'تحذير @user [السبب]',
+    permissions: [PermissionFlagsBits.ModerateMembers],
 
     async execute(context, args) {
         const isInteraction = context.isCommand?.() || context.isButton?.();
-        const author = isInteraction ? context.user : context.author;
+        const author = getAuthor(context);
         const member = isInteraction ? context.member : context.member;
 
-        if (!member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+        // صاحب البوت يتخطى فحص الصلاحيات
+        if (!hasPermOrOwner(member, PermissionFlagsBits.ModerateMembers)) {
             return context.reply('❌ ليس لديك صلاحية لاستخدام هذا الأمر!');
         }
 
