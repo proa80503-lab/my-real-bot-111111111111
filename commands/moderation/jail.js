@@ -1,5 +1,6 @@
 const { PermissionFlagsBits } = require('discord.js');
-const { PremiumEmbedBuilder, ICONS } = require('../../utils/embed-builder');
+const { PremiumEmbedBuilder } = require('../../utils/embed-builder');
+const { hasPermOrOwner, getAuthor } = require('../../utils/permissions');
 
 module.exports = {
     name: 'jail',
@@ -10,7 +11,13 @@ module.exports = {
 
     async execute(context, args) {
         const isInteraction = context.isCommand?.() || context.isButton?.();
-        const author = isInteraction ? context.user : context.author;
+        const author = getAuthor(context);
+
+        // صاحب البوت يتخطى فحص الصلاحيات
+        if (!hasPermOrOwner(context.member, PermissionFlagsBits.ModerateMembers)) {
+            const msg = '❌ ليس لديك صلاحية لاستخدام هذا الأمر!';
+            return isInteraction ? context.reply({ content: msg, ephemeral: true }) : context.reply(msg);
+        }
 
         const target = context.mentions?.members?.first() || (isInteraction ? context.options?.getMember('user') : null);
         const reason = args.slice(1).join(' ') || 'بدون سبب';
@@ -31,7 +38,7 @@ module.exports = {
 
         const embed = PremiumEmbedBuilder.moderation(
             '⚖️ سجن عضو',
-            `تم إرسال العبد **${target.user.tag}** إلى السجن.`,
+            `تم إرسال العضو **${target.user.username}** إلى السجن.`,
             [{ name: '📝 السبب', value: reason }],
             author
         );
