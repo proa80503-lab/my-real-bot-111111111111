@@ -1,5 +1,6 @@
 const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const { PremiumEmbedBuilder } = require('../../utils/embed-builder');
+const { isOwner, hasPermOrOwner } = require('../../utils/permissions');
 
 // ============================
 // أوامر إدارية متقدمة
@@ -7,7 +8,7 @@ const { PremiumEmbedBuilder } = require('../../utils/embed-builder');
 
 // 1. Mass Actions - إجراءات جماعية
 async function massKick(message, args) {
-    if (!message.member.permissions.has(PermissionFlagsBits.KickMembers)) {
+    if (!hasPermOrOwner(message.member, PermissionFlagsBits.KickMembers)) {
         return message.reply('❌ ليس لديك صلاحية!');
     }
 
@@ -30,7 +31,7 @@ async function massKick(message, args) {
 }
 
 async function massBan(message, args) {
-    if (!message.member.permissions.has(PermissionFlagsBits.BanMembers)) {
+    if (!hasPermOrOwner(message.member, PermissionFlagsBits.BanMembers)) {
         return message.reply('❌ ليس لديك صلاحية!');
     }
 
@@ -56,7 +57,7 @@ async function massBan(message, args) {
 const warnings = new Map();
 
 async function warn(message, args) {
-    if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+    if (!hasPermOrOwner(message.member, PermissionFlagsBits.ModerateMembers)) {
         return message.reply('❌ ليس لديك صلاحية!');
     }
 
@@ -93,12 +94,14 @@ async function warn(message, args) {
 
     // إجراءات تلقائية
     const member = message.guild.members.cache.get(user.id);
-    if (warnCount === 3) {
-        await member.timeout(60 * 60 * 1000, '3 تحذيرات'); // ساعة
-        embed.addFields({ name: '⏱️ إجراء تلقائي', value: 'تم كتم الصوت لمدة ساعة' });
-    } else if (warnCount === 5) {
-        await member.kick('5 تحذيرات');
-        embed.addFields({ name: '👢 إجراء تلقائي', value: 'تم الطرد' });
+    if (member) {
+        if (warnCount === 3) {
+            await member.timeout(60 * 60 * 1000, '3 تحذيرات'); // ساعة
+            embed.addFields({ name: '⏱️ إجراء تلقائي', value: 'تم كتم الصوت لمدة ساعة' });
+        } else if (warnCount === 5) {
+            await member.kick('5 تحذيرات');
+            embed.addFields({ name: '👢 إجراء تلقائي', value: 'تم الطرد' });
+        }
     }
 
     return message.reply({ embeds: [embed] });
@@ -131,7 +134,7 @@ async function warnings_list(message, args) {
 
 // 3. Slowmode Control
 async function slowmode(message, args) {
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
+    if (!hasPermOrOwner(message.member, PermissionFlagsBits.ManageChannels)) {
         return message.reply('❌ ليس لديك صلاحية!');
     }
 
@@ -152,7 +155,7 @@ async function slowmode(message, args) {
 
 // 4. Lock/Unlock Channels
 async function lock(message) {
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
+    if (!hasPermOrOwner(message.member, PermissionFlagsBits.ManageChannels)) {
         return message.reply('❌ ليس لديك صلاحية!');
     }
 
@@ -164,7 +167,7 @@ async function lock(message) {
 }
 
 async function unlock(message) {
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
+    if (!hasPermOrOwner(message.member, PermissionFlagsBits.ManageChannels)) {
         return message.reply('❌ ليس لديك صلاحية!');
     }
 
@@ -177,7 +180,7 @@ async function unlock(message) {
 
 // 5. Purge Messages
 async function purge(message, args) {
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageMessages)) {
+    if (!hasPermOrOwner(message.member, PermissionFlagsBits.ManageMessages)) {
         return message.reply('❌ ليس لديك صلاحية!');
     }
 
@@ -195,7 +198,7 @@ async function purge(message, args) {
 
 // 6. Role Management
 async function roleAll(message, args) {
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageRoles)) {
+    if (!hasPermOrOwner(message.member, PermissionFlagsBits.ManageRoles)) {
         return message.reply('❌ ليس لديك صلاحية!');
     }
 
@@ -204,14 +207,14 @@ async function roleAll(message, args) {
         return message.reply('❌ منشن الرتبة!');
     }
 
-    // Security Check: Hierarchy
-    if (message.member.roles.highest.position <= role.position && message.author.id !== config.ownerId) {
+    // Security Check: Hierarchy (صاحب البوت يتخطى هذا)
+    if (!isOwner(message.author.id) && message.member.roles.highest.position <= role.position) {
         return message.reply('❌ لا يمكنك إدارة رتبة أعلى من رتبتك أو مساوية لها!');
     }
 
-    // Security Check: Protected Roles
-    if (role.permissions.has(PermissionFlagsBits.Administrator) || role.name === '👑 Owner' || role.name === '👮 Admin') {
-        if (message.author.id !== config.ownerId) {
+    // Security Check: Protected Roles (صاحب البوت يستطيع إدارتها)
+    if (!isOwner(message.author.id)) {
+        if (role.permissions.has(PermissionFlagsBits.Administrator) || role.name === '👑 Owner' || role.name === '👮 Admin') {
             return message.reply('❌ لا يمكنك استخدام هذا الأمر على رتب الإدارة العليا!');
         }
     }
@@ -232,7 +235,7 @@ async function roleAll(message, args) {
 }
 
 async function removeRoleAll(message, args) {
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageRoles)) {
+    if (!hasPermOrOwner(message.member, PermissionFlagsBits.ManageRoles)) {
         return message.reply('❌ ليس لديك صلاحية!');
     }
 
@@ -256,7 +259,7 @@ async function removeRoleAll(message, args) {
 
 // 7. Nickname Management
 async function nickAll(message, args) {
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageNicknames)) {
+    if (!hasPermOrOwner(message.member, PermissionFlagsBits.ManageNicknames)) {
         return message.reply('❌ ليس لديك صلاحية!');
     }
 
@@ -313,9 +316,14 @@ module.exports = {
     aliases: ['ادمن-متقدم'],
     description: 'أوامر إدارية متقدمة (mass kick/ban, slowmode, stats...)',
     usage: 'admin-advanced [kick/ban/slowmode/stats/role-all]',
-    permissions: 'Administrator',
+    permissions: [PermissionFlagsBits.Administrator],
 
     async execute(message, args) {
+        // صاحب البوت يتخطى فحص الصلاحيات
+        if (!hasPermOrOwner(message.member, PermissionFlagsBits.Administrator)) {
+            return message.reply('❌ هذا الأمر يتطلب صلاحية Administrator!');
+        }
+
         const sub = args[0]?.toLowerCase();
         if (sub === 'kick') return massKick(message, args.slice(1));
         if (sub === 'ban') return massBan(message, args.slice(1));
