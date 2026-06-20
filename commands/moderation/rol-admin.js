@@ -49,7 +49,7 @@ module.exports = {
                 .setTitle('👮 تعيين أدمن جديد')
                 .setDescription(`تم تعيين ${target} كـ **${adminRole.name}**!`)
                 .addFields(
-                    { name: 'العضو', value: `${target} (${target.user.tag})`, inline: true },
+                    { name: 'العضو', value: `${target} (${target.user.username})`, inline: true },
                     { name: 'الرتبة', value: `${adminRole}`, inline: true },
                     { name: 'بواسطة', value: `${message.author}`, inline: true }
                 )
