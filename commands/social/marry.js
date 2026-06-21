@@ -93,7 +93,7 @@ module.exports = {
             if (pendingProposals.has(msg.id)) {
                 pendingProposals.delete(msg.id);
                 embed.setColor('#95A5A6').setDescription(`> ❌ **انتهى الوقت!**\n> ${target.username} لم يرد على طلب الزواج.`);
-                msg.edit({ embeds: [embed], components: [] }).catch(() => {});
+                msg.edit({ embeds: [embed], components: [] }).catch(() => { });
             }
         }, 60000);
     },
@@ -109,7 +109,7 @@ module.exports = {
 
             // فقط المدعو يستطيع الرد
             if (interaction.user.id !== targetId) {
-                return interaction.reply({ content: '❌ هذا الطلب ليس لك!', flags: MessageFlags.Ephemeral });
+                return interaction.reply({ content: 'دمشي ولي لك مو الك طلب التكاثر هذا', flags: MessageFlags.Ephemeral });
             }
 
             const msgId = interaction.message.id;
@@ -118,7 +118,7 @@ module.exports = {
             if (!isAccept) {
                 const embed = new EmbedBuilder()
                     .setColor('#ED4245')
-                    .setTitle('💔 تم رفض الطلب')
+                    .setTitle('💔 ضربك بوري ههههه')
                     .setDescription(`> ${interaction.user} رفض/ت طلب الزواج.`);
                 await interaction.update({ embeds: [embed], components: [] });
                 return;
@@ -133,10 +133,10 @@ module.exports = {
                 return interaction.update({ content: '❌ المتقدم تزوج بالفعل!', embeds: [], components: [] });
             }
             if (targetData.marriedTo) {
-                return interaction.update({ content: '❌ أنت متزوج/ة بالفعل!', embeds: [], components: [] });
+                return interaction.update({ content: '❌ ها خاين مو متزوج شعدك هنا', embeds: [], components: [] });
             }
             if ((proposerData.balance || 0) < MARRIAGE_COST) {
-                return interaction.update({ content: '❌ المتقدم لا يملك الرصيد الكافي!', embeds: [], components: [] });
+                return interaction.update({ content: '❌ ماعده فلوس ياكل تريده يعيشك', embeds: [], components: [] });
             }
 
             // تطبيق الزواج
@@ -161,10 +161,10 @@ module.exports = {
                 .setDescription([
                     `> 🎊 **${proposerUser.username}** و **${targetUser.username}** — زوجان الآن!`,
                     '',
-                    `> 💰 تكلفة الزواج: **${MARRIAGE_COST.toLocaleString()} ${config.currency}** (تم خصمها)`,
-                    `> 📅 تاريخ الزواج: <t:${Math.floor(now/1000)}:D>`,
+                    `> 💰 تكلفة الخمسة ههه اقصد الزواج: **${MARRIAGE_COST.toLocaleString()} ${config.currency}** (تم خصمها)`,
+                    `> 📅 تاريخ الزواج: <t:${Math.floor(now / 1000)}:D>`,
                 ].join('\n'))
-                .setFooter({ text: '❤️ مبارك الزواج! استخدم زواجي لرؤية بطاقتك' })
+                .setFooter({ text: '❤️ مبارك الزواجيا قوم لوط استخدم زواجي لرؤية بطاقتك' })
                 .setTimestamp();
 
             const row = new ActionRowBuilder().addComponents(
@@ -185,7 +185,7 @@ module.exports = {
             const userData = db.getUserData(interaction.user.id);
 
             if (!userData.marriedTo || (interaction.user.id !== p1Id && interaction.user.id !== p2Id)) {
-                return interaction.reply({ content: '❌ لست طرفاً في هذا الزواج!', flags: MessageFlags.Ephemeral });
+                return interaction.reply({ content: '❌ لست طرفاً في هذا الزواج يا مخنث', flags: MessageFlags.Ephemeral });
             }
 
             const partnerId = userData.marriedTo;
