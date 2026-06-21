@@ -56,17 +56,27 @@ module.exports = {
         }
 
         if (id === 'menu_profile') {
-            const profileCmd = interaction.client.commands.get('profile');
-            if (profileCmd) return profileCmd.execute(interaction, []);
-            return interaction.reply({ content: '👤 الملف الشخصي قريباً!', flags: MessageFlags.Ephemeral });
+            try {
+                // الملف الشخصي يعمل مع message فقط — نخبر المستخدم باستخدام الأمر
+                return interaction.reply({
+                    content: '> 👤 اكتب `بروفايل` أو `بروفايل @شخص` لعرض ملفك الشخصي!',
+                    flags: MessageFlags.Ephemeral
+                });
+            } catch (e) {
+                return interaction.reply({ content: '❌ تعذّر فتح الملف الشخصي.', flags: MessageFlags.Ephemeral });
+            }
         }
 
         if (id === 'menu_admin') {
             if (!interaction.member?.permissions.has('ModerateMembers')) {
                 return interaction.reply({ content: '❌ هذا القسم للمشرفين فقط!', flags: MessageFlags.Ephemeral });
             }
-            const panelCmd = interaction.client.commands.get('panel');
-            if (panelCmd) return panelCmd.execute(interaction, []);
+            try {
+                const adminPanelModule = require('../moderation/panel');
+                return adminPanelModule.execute(interaction, []);
+            } catch (e) {
+                return interaction.reply({ content: '❌ تعذّر فتح لوحة الإدارة.', flags: MessageFlags.Ephemeral });
+            }
         }
 
         if (id === 'menu_social') {
@@ -89,8 +99,23 @@ module.exports = {
         }
 
         if (id === 'menu_help') {
-            const helpCmd = interaction.client.commands.get('help');
-            if (helpCmd) return helpCmd.execute(interaction, []);
+            try {
+                const helpModule = require('../main/help');
+                // يبني embed المساعدة ويرسله
+                if (helpModule.buildHelpEmbed) {
+                    const helpData = helpModule.buildHelpEmbed();
+                    return interaction.reply({ ...helpData, flags: MessageFlags.Ephemeral });
+                }
+                return interaction.reply({
+                    content: '> ❓ اكتب `مساعدة` لعرض قائمة الأوامر الكاملة!',
+                    flags: MessageFlags.Ephemeral
+                });
+            } catch (e) {
+                return interaction.reply({
+                    content: '> ❓ اكتب `مساعدة` لعرض قائمة الأوامر الكاملة!',
+                    flags: MessageFlags.Ephemeral
+                });
+            }
         }
 
         if (id === 'menu_refresh') {
