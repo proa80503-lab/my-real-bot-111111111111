@@ -48,6 +48,24 @@ class ClanManager {
                 nextClanId: 1
             };
             this.saveClans();
+        } else {
+            // إصلاح بنية البيانات إذا كانت ناقصة
+            let repaired = false;
+            if (!this.clans[guildId].clans) {
+                this.clans[guildId].clans = {};
+                repaired = true;
+            }
+            if (!this.clans[guildId].members) {
+                this.clans[guildId].members = {};
+                repaired = true;
+            }
+            if (!this.clans[guildId].nextClanId) {
+                const ids = Object.keys(this.clans[guildId].clans)
+                    .map(k => parseInt(k.replace('clan_', '')) || 0);
+                this.clans[guildId].nextClanId = (ids.length ? Math.max(...ids) : 0) + 1;
+                repaired = true;
+            }
+            if (repaired) this.saveClans();
         }
         return this.clans[guildId];
     }
@@ -110,10 +128,21 @@ class ClanManager {
     // الحصول على كلان المستخدم
     getUserClan(guildId, userId) {
         const guildData = this.clans[guildId];
-        if (!guildData) return null;
+        if (!guildData || !guildData.clans || !guildData.members) return null;
 
-        const clanId = guildData.members[userId];
-        if (!clanId) return null;
+        let clanId = guildData.members[userId];
+
+        // ── إصلاح: إذا القائد غير مسجل في members لكنه فعلياً قائد لكلان ──
+        if (!clanId) {
+            const leaderClan = Object.values(guildData.clans).find(c => c.leaderId === userId);
+            if (leaderClan) {
+                // تسجيله تلقائياً وإصلاح البيانات
+                guildData.members[userId] = leaderClan.id;
+                this.saveClans();
+                return leaderClan;
+            }
+            return null;
+        }
 
         // التحقق من أن الكلان ما زال موجوداً
         if (!guildData.clans[clanId]) {
@@ -314,7 +343,7 @@ class ClanManager {
     // الحصول على جميع كلانات السيرفر
     getAllClans(guildId) {
         const guildData = this.clans[guildId];
-        if (!guildData) return [];
+        if (!guildData || !guildData.clans) return [];
         return Object.values(guildData.clans);
     }
     // مسح بيانات السيرفر بالكامل (Nuke)
