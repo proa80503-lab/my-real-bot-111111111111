@@ -86,7 +86,7 @@ function buildGamesPanel() {
             .setStyle(ButtonStyle.Primary)
     );
 
-    return { embed, components: [row1, row2, row3] };
+    return { embeds: [embed], components: [row1, row2, row3] };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -97,11 +97,12 @@ async function handleGameButton(interaction) {
     const userId = interaction.user.id;
     const client = interaction.client;
 
-    // ── تريفيا ───────────────────────────────────────────────
+    // ── تريفيا ────────────────────────────────────────────────
     if (id === 'game_trivia') {
-        const triviaCmd = client.commands.get('trivia');
-        if (triviaCmd) return triviaCmd.execute(interaction, []);
-        return interaction.reply({ content: '⚠️ تريفيا غير متاحة حالياً.', flags: MessageFlags.Ephemeral });
+        return interaction.reply({
+            content: '> 🧠 اكتب `تريفيا` في الشات لبدء لعبة الأسئلة!',
+            flags: MessageFlags.Ephemeral
+        });
     }
 
     // ── اكس او ───────────────────────────────────────────────
@@ -119,32 +120,36 @@ async function handleGameButton(interaction) {
         return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     }
 
-    // ── حجر ورقة مقص ─────────────────────────────────────────
+    // ── حجر ورقة مقص ──────────────────────────────────────────────
     if (id === 'game_rps') {
-        const rpsCmd = client.commands.get('rps');
-        if (rpsCmd) return rpsCmd.execute(interaction, []);
-        return interaction.reply({ content: '⚠️ حجر ورقة مقص غير متاح.', flags: MessageFlags.Ephemeral });
+        return interaction.reply({
+            content: '> ✊ اكتب `رحجة @شخص` لبدء لعبة حجر ورقة مقص!',
+            flags: MessageFlags.Ephemeral
+        });
     }
 
-    // ── حرف المشنقة ──────────────────────────────────────────
+    // ── حرف المشنقة ──────────────────────────────────────────────
     if (id === 'game_hangman') {
-        const hangCmd = client.commands.get('hangman');
-        if (hangCmd) return hangCmd.execute(interaction, []);
-        return interaction.reply({ content: '⚠️ المشنقة غير متاحة.', flags: MessageFlags.Ephemeral });
+        return interaction.reply({
+            content: '> 🎯 اكتب `مشنقة` في الشات لبدء لعبة المشنقة!',
+            flags: MessageFlags.Ephemeral
+        });
     }
 
-    // ── كلمة مشفرة ───────────────────────────────────────────
+    // ── كلمة مشفرة ───────────────────────────────────────────────
     if (id === 'game_scramble') {
-        const cmd = client.commands.get('scramble');
-        if (cmd) return cmd.execute(interaction, []);
-        return interaction.reply({ content: '⚠️ غير متاح.', flags: MessageFlags.Ephemeral });
+        return interaction.reply({
+            content: '> 🔤 اكتب `كلمة` في الشات لبدء لعبة الكلمة المشفرة!',
+            flags: MessageFlags.Ephemeral
+        });
     }
 
-    // ── رياضيات ──────────────────────────────────────────────
+    // ── رياضيات ────────────────────────────────────────────────
     if (id === 'game_math') {
-        const cmd = client.commands.get('math');
-        if (cmd) return cmd.execute(interaction, []);
-        return interaction.reply({ content: '⚠️ غير متاح.', flags: MessageFlags.Ephemeral });
+        return interaction.reply({
+            content: '> 🔢 اكتب `رياضيات` في الشات لبدء لعبة الرياضيات!',
+            flags: MessageFlags.Ephemeral
+        });
     }
 
     // ── التنبؤ ────────────────────────────────────────────────
@@ -168,23 +173,12 @@ async function handleGameButton(interaction) {
         return interaction.reply({ embeds: [embed] });
     }
 
-    // ── تحديات يومية ─────────────────────────────────────────
+    // ── تحديات يومية ─────────────────────────────────────────────
     if (id === 'game_daily_challenges') {
-        const cmd = client.commands.get('daily-challenges') || client.commands.get('تحديات');
-        if (cmd) return cmd.execute(interaction, []);
-        const embed = new EmbedBuilder()
-            .setColor('#E67E22')
-            .setTitle('🏆 التحديات اليومية')
-            .setDescription([
-                'اكتب `تحديات` في الشات للوصول للتحديات!',
-                '',
-                '**التحديات المتاحة:**',
-                '• اربح 3 مباريات تريفيا',
-                '• شارك بالشات 10 رسائل',
-                '• افتح اللوحة الاقتصادية',
-            ].join('\n'))
-            .setTimestamp();
-        return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+        return interaction.reply({
+            content: '> 🏆 اكتب `تحديات` في الشات لعرض التحديات اليومية!',
+            flags: MessageFlags.Ephemeral
+        });
     }
 
     // ── سلوتس ─────────────────────────────────────────────────
