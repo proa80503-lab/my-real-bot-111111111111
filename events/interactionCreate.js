@@ -292,6 +292,10 @@ module.exports = {
                 else if (id.startsWith('menu_')) {
                     await menuModule.handleMenuInteraction(interaction);
                 }
+                // eco_leaderboard — يُعالَج دائماً بواسطة ecoHub سواء جاء من القائمة أو اللوحة
+                else if (id === 'eco_leaderboard') {
+                    await ecoHub.handleEcoButton(interaction);
+                }
                 // Economy dashboard buttons
                 else if (id.startsWith('econ_')) {
                     await balanceModule.handleEconomyInteraction(interaction);
@@ -302,7 +306,13 @@ module.exports = {
                 }
                 // Profile buttons (handled by collector inside profile.js)
                 else if (id.startsWith('prof_')) {
-                    // Handled by the message component collector in profile.js — no action needed here
+                    // Collector قد يكون انتهت مدته — نرد بصمت لمنع "This interaction failed"
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({
+                            content: '⌛ انتهت مدة هذه الجلسة. اكتب `بروفايل` من جديد لعرض ملفك الشخصي.',
+                            flags: MessageFlags.Ephemeral
+                        }).catch(() => {});
+                    }
                 }
                 // Owner Dashboard buttons
                 else if (id.startsWith('owner_')) {
@@ -347,21 +357,35 @@ module.exports = {
                 }
                 // Guide navigation buttons
                 else if (id.startsWith('guide_')) {
-                    // Handled by message component collectors in guide.js
                     // The eco panel button 'guide_economy' opens the panel
                     if (id === 'guide_economy') {
                         const panel = await ecoHub.buildMainPanel(interaction.user.id, interaction.client);
                         await interaction.update({ ...panel });
+                    } else {
+                        // أزرار الـ guide الأخرى (prev/next/page) — collector قد انتهى
+                        if (!interaction.replied && !interaction.deferred) {
+                            await interaction.reply({
+                                content: '⌛ انتهت مدة هذه الجلسة. اكتب الأمر من جديد.',
+                                flags: MessageFlags.Ephemeral
+                            }).catch(() => {});
+                        }
                     }
-                    // Other guide buttons (prev/next/page) handled by collector
                 }
                 // Silently ignore expired/handled-externally buttons
                 else if (id === 'fast_click_gift' || id.startsWith('ignore_')) {
-                    // Handled by collectors
+                    // أزرار مُهمَلة — نرد بصمت لمنع "This interaction failed"
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.deferUpdate().catch(() => {});
+                    }
                 }
                 else {
-                    // Silently ignore unknown buttons to avoid crashes
-                    // console.debug('[Interaction] Unknown button:', id);
+                    // زر غير معروف — نرد بصمت لمنع "This interaction failed"
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({
+                            content: '⚙️ هذا الزر لا يعمل في الوقت الحالي.',
+                            flags: MessageFlags.Ephemeral
+                        }).catch(() => {});
+                    }
                 }
             }
 
