@@ -11,7 +11,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags
 const db = require('../../utils/database');
 const config = require('../../config');
 const analytics = require('../../utils/analytics');
-const achievementsCmd = require('./achievements-cmd');
+const achievementsCmd = require('../main/achievements-cmd');
 
 // ─── الأصول المتاحة للتداول ───────────────────────────────────────────────────
 const ASSETS = {
@@ -301,7 +301,10 @@ async function buyAsset(message, assetKey, quantity) {
         .setTimestamp();
 
     await message.reply({ embeds: [embed] });
-    await achievementsCmd.checkAchievements(userId, 'balance_check', {}, message);
+    // تحقق من الإنجازات إذا كانت الدالة متاحة
+    if (achievementsCmd?.checkAchievements) {
+        await achievementsCmd.checkAchievements(userId, 'balance_check', {}, message);
+    }
 }
 
 async function sellAsset(message, assetKey, quantityInput) {
