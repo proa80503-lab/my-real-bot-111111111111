@@ -33,7 +33,7 @@ const BADGES = {
     winner:     { emoji: '🌟', name: 'فائز كبير',       condition: u => (u.stats?.biggestWin || 0) >= 10000 },
 
     // شارات اجتماعية
-    married:    { emoji: '💍', name: 'متزوج',           condition: u => u.partner !== null },
+    married:    { emoji: '💍', name: 'متزوج',           condition: u => u.partner !== null || u.marriedTo !== null },
     streaker:   { emoji: '🔥', name: 'ملتزم',           condition: u => (u.dailyStreak || 0) >= 7 },
     veteran:    { emoji: '⚔️', name: 'محارب قديم',       condition: u => (u.dailyStreak || 0) >= 30 },
 
@@ -67,11 +67,15 @@ function getUserTitle(userData) {
 
 // ─── حساب التقدم للمستوى القادم ──────────────────────────────────────────────
 function getLevelProgress(xp, level) {
-    const xpForCurrent = level * level * 100;
+    const xpForCurrent = Math.max(0, level * level * 100);
     const xpForNext = (level + 1) * (level + 1) * 100;
-    const progress = Math.min(100, Math.floor((xp - xpForCurrent) / (xpForNext - xpForCurrent) * 100));
-    const bar = '█'.repeat(Math.floor(progress / 10)) + '░'.repeat(10 - Math.floor(progress / 10));
-    return { progress, bar, xpNeeded: xpForNext - xp };
+    const diff = xpForNext - xpForCurrent;
+    const rawProgress = diff > 0 ? ((xp - xpForCurrent) / diff) * 100 : 100;
+    const progress = Math.min(100, Math.max(0, Math.floor(rawProgress)));
+    const filled = Math.floor(progress / 10);
+    const bar = '█'.repeat(filled) + '░'.repeat(10 - filled);
+    const xpNeeded = Math.max(0, xpForNext - xp);
+    return { progress, bar, xpNeeded };
 }
 
 // ─── رسم شريط التقدم ─────────────────────────────────────────────────────────
@@ -116,8 +120,8 @@ module.exports = {
                     ? `**الشارات:** ${badges.slice(0, 6).join(' • ')}`
                     : '*لا توجد شارات بعد — العب واربح لتحصل على شارات!*',
                 '',
-                userData.partner
-                    ? `💍 **متزوج من:** <@${userData.partner}>`
+                userData.marriedTo || userData.partner
+                    ? `💍 **متزوج من:** <@${userData.marriedTo || userData.partner}>`
                     : '',
             ].filter(Boolean).join('\n'))
             .addFields(
@@ -198,54 +202,143 @@ module.exports = {
 
         // معالجة أزرار البروفايل
         const collector = reply.createMessageComponentCollector({ time: 120000 });
-        collector.on('collect', async (interaction) => {
-            if (interaction.user.id !== message.author.id) {
-                return interaction.reply({ content: '❌ هذه الأزرار لصاحب الأمر فقط', flags: MessageFlags.Ephemeral });
+        collector.on('collect', async (btnInteraction) => {
+            if (btnInteraction.user.id !== message.author.id) {
+                return btnInteraction.reply({ content: '❌ هذه الأزرار لصاحب الأمر فقط', flags: MessageFlags.Ephemeral });
             }
 
-            if (interaction.customId.startsWith('prof_badges_')) {
-                const allBadges = getUserBadges(db.getUserData(target.id));
-                const badgeEmbed = new EmbedBuilder()
-                    .setColor(titleInfo.color)
-                    .setTitle(`🏅 شارات ${target.username}`)
-                    .setDescription(
-                        allBadges.length > 0
-                            ? allBadges.map(b => `> ${b}`).join('\n')
-                            : '> *لا توجد شارات بعد! العب الألعاب وراكم الثروة للحصول على شارات.*'
-                    )
-                    .setThumbnail(target.displayAvatarURL())
-                    .addFields({
-                        name: '📋 كيفية الحصول على الشارات',
-                        value: [
-                            '`🥉🥈🥇🏆` — ارفع مستواك',
-                            '`💎👑` — اجمع ثروة',
-                            '`🎮🎯🌟` — العب وافز',
-                            '`💍🔥⚔️` — تزوج وحافظ على التتابع',
-                        ].join('\n')
-                    });
-                await interaction.update({ embeds: [badgeEmbed], components: [row] });
+            try {
+                if (btnInteraction.customId.startsWith('prof_badges_')) {
+                    const allBadges = getUserBadges(db.getUserData(target.id));
+                    const badgeEmbed = new EmbedBuilder()
+                        .setColor(titleInfo.color)
+                        .setTitle(`🏅 شارات ${target.username}`)
+                        .setDescription(
+                            allBadges.length > 0
+                                ? allBadges.map(b => `> ${b}`).join('\n')
+                                : '> *لا توجد شارات بعد! العب الألعاب وراكم الثروة للحصول على شارات.*'
+                        )
+                        .setThumbnail(target.displayAvatarURL())
+                        .addFields({
+                            name: '📋 كيفية الحصول على الشارات',
+                            value: [
+                                '`🥉🥈🥇🏆` — ارفع مستواك',
+                                '`💎👑` — اجمع ثروة',
+                                '`🎮🎯🌟` — العب وافز',
+                                '`💍🔥⚔️` — تزوج وحافظ على التتابع',
+                            ].join('\n')
+                        });
+                    await btnInteraction.update({ embeds: [badgeEmbed], components: [row] });
 
-            } else if (interaction.customId.startsWith('prof_history_')) {
-                const freshData = db.getUserData(target.id);
-                const transactions = (freshData.transactions || []).slice(0, 10);
+                } else if (btnInteraction.customId.startsWith('prof_history_')) {
+                    const freshData = db.getUserData(target.id);
+                    const transactions = (freshData.transactions || []).slice(0, 10);
 
-                const histEmbed = new EmbedBuilder()
-                    .setColor('#3498DB')
-                    .setTitle(`📋 آخر معاملات ${target.username}`)
-                    .setDescription(
-                        transactions.length > 0
-                            ? transactions.map(t => {
-                                const date = new Date(t.timestamp).toLocaleDateString('ar-SA');
-                                const sign = t.type.includes('win') || t.type === 'daily' || t.type === 'earn' ? '+' : '-';
-                                const color = sign === '+' ? '🟢' : '🔴';
-                                return `${color} \`${sign}${t.amount.toLocaleString()}\` — ${t.description} *(${date})*`;
-                            }).join('\n')
-                            : '*لا توجد معاملات بعد*'
-                    );
-                await interaction.update({ embeds: [histEmbed], components: [row] });
+                    const histEmbed = new EmbedBuilder()
+                        .setColor('#3498DB')
+                        .setTitle(`📋 آخر معاملات ${target.username}`)
+                        .setDescription(
+                            transactions.length > 0
+                                ? transactions.map(t => {
+                                    const date = new Date(t.timestamp).toLocaleDateString('ar-SA');
+                                    const sign = t.type.includes('win') || t.type === 'daily' || t.type === 'earn' ? '+' : '-';
+                                    const color = sign === '+' ? '🟢' : '🔴';
+                                    return `${color} \`${sign}${t.amount.toLocaleString()}\` — ${t.description} *(${date})*`;
+                                }).join('\n')
+                                : '*لا توجد معاملات بعد*'
+                        );
+                    await btnInteraction.update({ embeds: [histEmbed], components: [row] });
 
-            } else if (interaction.customId.startsWith('prof_refresh_')) {
-                await interaction.update({ embeds: [embed], components: [row] });
+                } else if (btnInteraction.customId.startsWith('prof_refresh_')) {
+                    // إعادة بناء الـ embed بأحدث البيانات
+                    const freshUser = db.getUserData(target.id);
+                    const freshStats = analytics.getUserStats(target.id);
+                    const freshTrust = getTrustScore(target.id);
+                    const freshTitle = getUserTitle(freshUser);
+                    const freshBadges = getUserBadges(freshUser);
+                    const freshLevel = getLevelProgress(freshUser.xp || 0, freshUser.level || 1);
+                    const freshWealth = (freshUser.balance || 0) + (freshUser.bank || 0);
+                    const freshWinRate = freshUser.stats?.gamesPlayed > 0
+                        ? Math.round((freshUser.stats.gamesWon / freshUser.stats.gamesPlayed) * 100)
+                        : 0;
+
+                    const refreshedEmbed = new EmbedBuilder()
+                        .setColor(freshTitle.color)
+                        .setAuthor({
+                            name: `${freshTitle.title}  ${target.username}`,
+                            iconURL: target.displayAvatarURL({ size: 128 })
+                        })
+                        .setThumbnail(target.displayAvatarURL({ size: 256 }))
+                        .setDescription([
+                            freshBadges.length > 0
+                                ? `**الشارات:** ${freshBadges.slice(0, 6).join(' • ')}`
+                                : '*لا توجد شارات بعد — العب واربح لتحصل على شارات!*',
+                            '',
+                            freshUser.marriedTo
+                                ? `💍 **متزوج من:** <@${freshUser.marriedTo}>`
+                                : (freshUser.partner ? `💍 **متزوج من:** <@${freshUser.partner}>` : ''),
+                        ].filter(Boolean).join('\n'))
+                        .addFields(
+                            {
+                                name: '⭐ المستوى والخبرة',
+                                value: [
+                                    `\`Lv.${freshUser.level || 1}\` ${freshLevel.bar} \`${freshLevel.progress}%\``,
+                                    `> XP: \`${(freshUser.xp || 0).toLocaleString()}\` | يحتاج: \`${freshLevel.xpNeeded.toLocaleString()}\` للمستوى القادم`
+                                ].join('\n'),
+                                inline: false
+                            },
+                            {
+                                name: '💰 الثروة',
+                                value: [
+                                    `> 👛 **المحفظة:** \`${(freshUser.balance || 0).toLocaleString()}\` ${config.currency}`,
+                                    `> 🏦 **البنك:** \`${(freshUser.bank || 0).toLocaleString()}\` ${config.currency}`,
+                                    `> 💎 **الإجمالي:** \`${freshWealth.toLocaleString()}\` ${config.currency}`,
+                                ].join('\n'),
+                                inline: true
+                            },
+                            {
+                                name: '🎮 إحصائيات الألعاب',
+                                value: [
+                                    `> 🎯 **الألعاب:** \`${freshUser.stats?.gamesPlayed || 0}\``,
+                                    `> 🏆 **الانتصارات:** \`${freshUser.stats?.gamesWon || 0}\``,
+                                    `> 📊 **معدل الفوز:** \`${freshWinRate}%\``,
+                                    `> 💰 **أكبر ربح:** \`${(freshUser.stats?.biggestWin || 0).toLocaleString()}\``,
+                                ].join('\n'),
+                                inline: true
+                            },
+                            {
+                                name: '📊 النشاط العام',
+                                value: [
+                                    `> 💬 **الرسائل:** \`${(freshStats.messages || 0).toLocaleString()}\``,
+                                    `> ⌨️ **الأوامر:** \`${(freshStats.commands || 0).toLocaleString()}\``,
+                                    `> 🔥 **Daily Streak:** \`${freshUser.dailyStreak || 0}\` يوم`,
+                                    `> 🛡️ **الثقة:** \`${freshTrust}/100\` ${getTrustBadge(freshTrust)}`,
+                                ].join('\n'),
+                                inline: true
+                            },
+                            {
+                                name: '🎒 المخزون والإنجازات',
+                                value: [
+                                    `> 🎒 **العناصر:** \`${Object.keys(freshUser.inventory || {}).length}\` عنصر`,
+                                    `> 🏅 **الإنجازات:** \`${(freshUser.achievements || []).length}\` إنجاز`,
+                                    `> 📅 **انضم:** \`${freshUser.joinDate ? new Date(freshUser.joinDate).toLocaleDateString('ar-SA') : 'غير معروف'}\``,
+                                ].join('\n'),
+                                inline: true
+                            }
+                        )
+                        .setFooter({
+                            text: `📊 بطاقة هوية متطورة • ${target.username}`,
+                            iconURL: message.client.user.displayAvatarURL()
+                        })
+                        .setTimestamp();
+
+                    await btnInteraction.update({ embeds: [refreshedEmbed], components: [row] });
+                }
+            } catch (err) {
+                console.error('[Profile Button Error]:', err);
+                if (!btnInteraction.replied && !btnInteraction.deferred) {
+                    btnInteraction.reply({ content: '❌ حدث خطأ في معالجة الزر.', flags: MessageFlags.Ephemeral }).catch(() => {});
+                }
             }
         });
 
