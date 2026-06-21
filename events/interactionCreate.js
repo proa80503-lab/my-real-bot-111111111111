@@ -17,6 +17,21 @@ const companyModule = require('../commands/economy/company');
 const ecoHub = require('../commands/economy/economy-hub');
 const gamesHub = require('../commands/games/games-hub');
 
+// ── الأوامر الجديدة بالأزرار ────────────────────────────────────────────────────
+const hangmanModule = require('../commands/games/hangman');
+const mathModule = require('../commands/games/math');
+const memoryModule = require('../commands/games/memory');
+const funButtons = require('../commands/fun/fun-buttons');
+const marketModule = require('../commands/economy/market');
+const casinoModule = require('../commands/economy/casino');
+const achievementsModule = require('../commands/main/achievements-cmd');
+const analyticsModule = require('../commands/main/analytics');
+const minigamesModule = require('../commands/games/minigames');
+const dailyModule = require('../commands/economy/daily');
+const workModule = require('../commands/economy/work');
+const marryModule = require('../commands/social/marry');
+const modButtonsModule = require('../commands/moderation/mod-buttons');
+
 module.exports = {
     name: Events.InteractionCreate,
     async execute(interaction) {
@@ -132,13 +147,72 @@ module.exports = {
                     };
                     await interaction.reply({ content: guides[id] || '❓ غير معروف', flags: MessageFlags.Ephemeral });
                 }
-                // Tic-Tac-Toe
+                // ❌⭕ Tic-Tac-Toe (v3 — bot, pvp, accept, decline, move)
                 else if (id.startsWith('ttt_')) {
                     await tttModule.handleTicTacToeInteraction(interaction);
                 }
-                // Rock Paper Scissors
+                // 🪊📄✂️ Rock Paper Scissors (v3)
                 else if (id.startsWith('rps_')) {
                     await rpsModule.handleRPSInteraction(interaction);
+                }
+                // 😵 Hangman (loحة الحروف)
+                else if (id.startsWith('hangman_')) {
+                    await hangmanModule.handleHangmanInteraction(interaction);
+                }
+                // 🧠 Memory Match (بطاقات التطابق)
+                else if (id.startsWith('memory_')) {
+                    await memoryModule.handleMemoryInteraction(interaction);
+                }
+                // 🧾e Math (إجابات متعددة)
+                else if (id.startsWith('math_')) {
+                    await mathModule.handleMathInteraction(interaction);
+                }
+                // 🔮 Fortune
+                else if (id.startsWith('fortune_')) {
+                    await funButtons.fortune.handleFortuneInteraction(interaction);
+                }
+                // 🤔 WYR (هل تفضل)
+                else if (id.startsWith('wyr_')) {
+                    await funButtons.wyr.handleWYRInteraction(interaction);
+                }
+                // 💘 Ship (توافق)
+                else if (id.startsWith('ship_')) {
+                    await funButtons.ship.handleShipInteraction(interaction);
+                }
+                // 🎲 Roll (نرد)
+                else if (id.startsWith('roll_')) {
+                    await funButtons.roll.handleRollInteraction(interaction);
+                }
+                // 🔮 8ball
+                else if (id.startsWith('ball_')) {
+                    await funButtons.ball.handleBallInteraction(interaction);
+                }
+                // 💹 Market (سوق)
+                else if (id.startsWith('market_') || id.startsWith('mkt_')) {
+                    if (marketModule.handleMarketInteraction) await marketModule.handleMarketInteraction(interaction);
+                }
+                // 🎯 Mini-Games
+                else if (id.startsWith('mg_')) {
+                    // معالجة أزرار الألعاب المصغرة من القائمة الرئيسية
+                    if (id === 'mg_bomb') {
+                        await minigamesModule.execute(interaction.message, ['bomb']);
+                    } else if (id === 'mg_speed') {
+                        await minigamesModule.execute(interaction.message, ['speed']);
+                    } else if (id === 'mg_chain') {
+                        await minigamesModule.execute(interaction.message, ['chain']);
+                    }
+                }
+                // 🏅 Achievements
+                else if (id.startsWith('ach_')) {
+                    if (achievementsModule.handleAchievementsInteraction) {
+                        await achievementsModule.handleAchievementsInteraction(interaction);
+                    }
+                }
+                // 📊 Analytics
+                else if (id.startsWith('analytics_') || id.startsWith('anal_')) {
+                    if (analyticsModule.handleAnalyticsInteraction) {
+                        await analyticsModule.handleAnalyticsInteraction(interaction);
+                    }
                 }
                 // Punishments buttons
                 else if (id.startsWith('remove_')) {
@@ -255,6 +329,22 @@ module.exports = {
                 // Company buttons (must come LAST to not conflict with clan_)
                 else if (id.startsWith('comp_')) {
                     await companyModule.handleCompanyInteraction(interaction);
+                }
+                // 🎁 Daily buttons
+                else if (id.startsWith('daily_')) {
+                    if (dailyModule.handleDailyInteraction) await dailyModule.handleDailyInteraction(interaction);
+                }
+                // 💼 Work buttons
+                else if (id.startsWith('work_')) {
+                    if (workModule.handleWorkInteraction) await workModule.handleWorkInteraction(interaction);
+                }
+                // 💍 Marry / Divorce buttons
+                else if (id.startsWith('marry_') || id.startsWith('married_')) {
+                    if (marryModule.handleMarryInteraction) await marryModule.handleMarryInteraction(interaction);
+                }
+                // 🔨 Moderation confirmation buttons (ban/kick/warn/mute)
+                else if (id.startsWith('mod_confirm_') || id.startsWith('mod_cancel_')) {
+                    await modButtonsModule.handleModButton(interaction);
                 }
                 // Guide navigation buttons
                 else if (id.startsWith('guide_')) {
