@@ -59,6 +59,13 @@ const SERVER_SETUP_TRIGGERS = [
 ];
 
 // أوامر الكلانات — محمية من التعارض
+// حذف كلانات / حذف كلان — تعالج قبل CLAN_TRIGGERS لتجنب التعارض
+const NUKE_CLAN_TRIGGERS = [
+    'حذف كلانات', 'حذف كلان',
+    'إلغاء كلانات', 'إلغاء كلان',
+    'nuke-clans', 'nuke_clans', 'reset-clans',
+];
+
 const CLAN_TRIGGERS = [
     'تفعيل كلان', 'تفعيل-كلان', 'setup clans', 'setup-clans',
     'كلان', 'كلانات', 'قبائل', 'clan', 'clans'
@@ -128,6 +135,18 @@ module.exports = {
                 }
                 return;
             }
+        }
+
+        // ── حذف الكلانات (nuke) — تعالج قبل أوامر الكلان العادية لتجنب التعارض
+        if (NUKE_CLAN_TRIGGERS.some(t => lowMsg === t || lowMsg.startsWith(t + ' '))) {
+            try {
+                const nukeClanCmd = require('../commands/social/nuke-clans');
+                await nukeClanCmd.execute(message);
+            } catch (e) {
+                console.error('[NukeClans] خطأ:', e.message);
+                message.reply('❌ خطأ في أمر حذف الكلانات: ' + e.message).catch(() => {});
+            }
+            return;
         }
 
         // ── أوامر الكلانات (تقدم على تفعيل السيرفر لمنع التعارض)
