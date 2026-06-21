@@ -2,6 +2,14 @@ const { Events, ActivityType } = require('discord.js');
 const autoTasks = require('../utils/auto-tasks');
 const ghostPing = require('../utils/ghost-ping');
 
+// ── الأنظمة الجديدة ────────────────────────────────────────────────────────────────────────────────
+let analytics = null;
+let botEvents = null;
+let smartCaches = null;
+try { analytics = require('../utils/analytics'); } catch {}
+try { ({ botEvents } = require('../utils/event-system')); } catch {}
+try { smartCaches = require('../utils/smart-cache'); } catch {}
+
 module.exports = {
     name: Events.ClientReady,
     once: true,
@@ -94,5 +102,29 @@ module.exports = {
                 console.warn('[Leaderboard] خطأ في التحديث التلقائي:', e.message);
             }
         }, 10000);
+
+        // ── تهيئة الأنظمة الجديدة (15 ثانية) ─────────────────────────────────────
+        setTimeout(() => {
+            try {
+                // تسجيل بدء تشغيل البوت في التحليلات
+                analytics?.trackEvent('bot_start', {
+                    guilds: client.guilds.cache.size,
+                    users: client.users.cache.size,
+                    tag: client.user.tag
+                });
+
+                // إطلاق حدث البدء
+                botEvents?.fire('bot:ready', { client });
+
+                console.log('🚀 [NextGen Systems] تم تهيئة الأنظمة الجديدة:');
+                console.log('   📊 Analytics Engine ✔️');
+                console.log('   🧠 Persona Engine ✔️');
+                console.log('   🛡️ Advanced Security ✔️');
+                console.log('   ⚡ Smart Cache ✔️');
+                console.log('   🎛️ Event System ✔️');
+            } catch (e) {
+                console.warn('[NextGen] خطأ في تهيئة الأنظمة:', e.message);
+            }
+        }, 15000);
     },
 };
