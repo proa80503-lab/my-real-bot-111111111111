@@ -13,6 +13,14 @@ const randomInteractions = require('../utils/random-interactions');
 const aiBrain = require('../utils/ai-brain');
 const dailyChallenges = require('../utils/daily-challenges');
 
+// ── التحليلات والأمان المتقدم ───────────────────────────────────────────────
+let analytics = null;
+let advSecurity = null;
+let personaEngine = null;
+try { analytics = require('../utils/analytics'); } catch { /* اختياري */ }
+try { advSecurity = require('../utils/advanced-security'); } catch { /* اختياري */ }
+try { personaEngine = require('../utils/persona-engine').personaEngine; } catch { /* اختياري */ }
+
 // ─── أوامر الموسيقى المختصرة ───────────────────────────────────────────────
 let musicCmd = null;
 try {
@@ -94,6 +102,17 @@ module.exports = {
                     content,
                     message.guild.id
                 );
+            } catch { /* silent */ }
+
+            // ── تتبع التحليلات والسلوك ────────────────────────────────────
+            try {
+                analytics?.trackMessage(message.author.id, message.guild.id);
+                const profile = advSecurity?.getProfile(message.author.id);
+                profile?.addMessage(message);
+
+                // كشف الساعات الخاصة (إنجازات)
+                const { checkAchievements } = require('../commands/main/achievements-cmd');
+                checkAchievements(message.author.id, 'night_owl', {}, message).catch(() => {});
             } catch { /* silent */ }
         }
 
@@ -287,13 +306,22 @@ module.exports = {
                 }
 
                 try {
+                    const startTime = Date.now();
                     await command.execute(message, args);
+
+                    // ── تتبع الأمر في التحليلات ────────────────────────────
+                    try {
+                        analytics?.trackCommand(commandName, message.author.id, message.guild?.id);
+                        const responseMs = Date.now() - startTime;
+                        analytics?.trackResponseTime(responseMs);
+                    } catch { /* silent */ }
 
                     // تحديث تحدي الرسائل
                     await dailyChallenges.updateProgress(message.author.id, 'messages', 1, message).catch(() => { });
 
                 } catch (error) {
                     console.error(`[Command:${commandName}]`, error);
+                    analytics?.trackError(error, commandName);
                     message.reply(`❌ حدث خطأ أثناء تنفيذ الأمر: ${error.message || 'خطأ غير متوقع'}`).catch(() => { });
                 }
                 return;
@@ -441,12 +469,27 @@ async function _handleAIReply(message) {
     }
 
     const ctx = _aiCtx.get(message.channel.id) || [];
-    const systemPrompt = aiBrain.buildSystemPrompt(
-        message.client.user.username,
-        message.guild?.name || 'السيرفر',
-        message.author.id,
-        ctx
-    );
+
+    // ── استخدام محرك الشخصية المتقدم إذا كان متاحاً ─────────────────────────
+    let systemPrompt;
+    if (personaEngine) {
+        const profile = aiBrain.getUserProfile(message.author.id);
+        systemPrompt = personaEngine.buildAdvancedPrompt({
+            botName: message.client.user.username,
+            guildName: message.guild?.name || 'السيرفر',
+            userId: message.author.id,
+            channelId: message.channel.id,
+            userProfile: profile,
+            extraContext: ctx.length > 0 ? `\n[سياق المحادثة]:\n${ctx.map(e => `${e.role}: ${e.text}`).join('\n')}` : ''
+        });
+    } else {
+        systemPrompt = aiBrain.buildSystemPrompt(
+            message.client.user.username,
+            message.guild?.name || 'السيرفر',
+            message.author.id,
+            ctx
+        );
+    }
 
     _aiUserCooldown.set(message.author.id, Date.now());
 
