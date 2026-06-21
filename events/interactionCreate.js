@@ -300,10 +300,9 @@ module.exports = {
                 else if (id.startsWith('admin_') || id.startsWith('adm_')) {
                     await adminPanelModule.handleAdminInteraction(interaction);
                 }
-                // Profile refresh button
-                else if (id.startsWith('prof_refresh_')) {
-                    const profileCmd = interaction.client.commands.get('profile');
-                    if (profileCmd) await profileCmd.execute(interaction, []);
+                // Profile buttons (handled by collector inside profile.js)
+                else if (id.startsWith('prof_')) {
+                    // Handled by the message component collector in profile.js — no action needed here
                 }
                 // Owner Dashboard buttons
                 else if (id.startsWith('owner_')) {
