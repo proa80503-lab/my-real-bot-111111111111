@@ -75,10 +75,16 @@ function buildMainEmbed(botUser) {
         .addFields(
             { name: '💰 الاقتصاد الأساسي',   value: 'رصيد، يومي، راتب، عمل، سرقة', inline: true },
             { name: '📈 الاقتصاد المتقدم',    value: 'شركة، بورصة، مزاد، عقارات', inline: true },
+            { name: '💹 السوق الجديد',         value: 'سوق، تداول، محفظة، رسوم بيانية', inline: true },
             { name: '🎮 الألعاب',              value: 'تريفيا، اكس او، مشنقة', inline: true },
+            { name: '🎰 الكازينو المتطور',     value: 'كازينو، سلوتس، كراش، رولت', inline: true },
+            { name: '🎯 الألعاب المصغرة',      value: 'mini bomb، mini speed، mini chain', inline: true },
             { name: '👥 الاجتماعي',            value: 'زواج، كلان، أصدقاء', inline: true },
             { name: '🛡️ الإدارة',             value: 'طرد، باند، ميوت، سجن', inline: true },
-            { name: '🎉 ترفيه',               value: 'حظك، ميم، سفينة، 8بول', inline: true }
+            { name: '🎉 ترفيه',               value: 'حظك، ميم، سفينة، 8بول', inline: true },
+            { name: '🏅 إنجازات جديدة',       value: 'انجازات، بروفايل، تحليلات', inline: true },
+            { name: '📊 التحليلات',            value: 'احصائيات يومية، رسوم بيانية', inline: true },
+            { name: '🏓 نظام بينج',            value: 'ping — تقرير الأداء المتكامل', inline: true }
         )
         .setTimestamp()
         .setFooter({ text: 'اختر قسماً من القائمة 👇' });
@@ -215,11 +221,20 @@ function getInfoEmbed() {
         .setTitle('ℹ️ معلومات عامة')
         .setDescription('> معلومات عن البوت والنظام')
         .addFields(
-            { name: '📦 الإصدار', value: 'v2.5.0 — نظام اقتصادي + اجتماعي + ألعاب', inline: true },
+            { name: '📦 الإصدار', value: 'v3.0.0 — الجيل القادم 🚀', inline: true },
             { name: '🌐 اللغة', value: 'عربي بالكامل', inline: true },
             { name: '⚡ البريفكس', value: `\`${config.prefix}\` أو بدون بريفكس`, inline: true },
-            { name: '💡 نصائح', value: '• اكتب الأمر مباشرة بدون بريفكس (مثلاً: `يومي`)\n• معظم الأوامر تعمل بالأزرار التفاعلية\n• يمكنك منشنة البوت للتحدث معه' },
-            { name: '📋 الأقسام', value: 'اقتصاد • ألعاب • اجتماعي • إدارة • ترفيه\nاستخدم القائمة لاستعراض كل قسم' }
+            { name: '🆕 الأنظمة الجديدة', value: [
+                '> 📊 **Analytics Engine** — تحليلات آنية',
+                '> 🧠 **Persona Engine** — شخصية ديناميكية ومزاج',
+                '> 🛡️ **Advanced Security** — نقاط الثقة وكشف البوتات',
+                '> ⚡ **Smart Cache** — أداء فائق السرعة',
+                '> 🎰 **Casino v3** — سلوتس + كراش + رولت',
+                '> 💹 **Market v3** — سوق مالي بأسعار ديناميكية',
+                '> 🏅 **Achievements** — نظام الإنجازات الكامل',
+                '> 🎯 **Mini-Games** — ألعاب مصغرة جديدة',
+            ].join('\n') },
+            { name: '💡 نصائح', value: '• اكتب الأمر مباشرة بدون بريفكس (مثلاً: `يومي`)\n• معظم الأوامر تعمل بالأزرار التفاعلية\n• يمكنك منشنة البوت للتحدث معه\n• `انجازات` لعرض إنجازاتك' }
         )
         .setTimestamp();
 }
