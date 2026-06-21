@@ -73,7 +73,9 @@ module.exports = {
             }
             try {
                 const adminPanelModule = require('../moderation/panel');
-                return adminPanelModule.execute(interaction, []);
+                // نبني اللوحة مباشرة بدلاً من execute() لأنها مبنية للرسائل
+                const panel = adminPanelModule.buildAdminPanel(interaction.guild);
+                return interaction.update({ ...panel });
             } catch (e) {
                 return interaction.reply({ content: '❌ تعذّر فتح لوحة الإدارة.', flags: MessageFlags.Ephemeral });
             }
