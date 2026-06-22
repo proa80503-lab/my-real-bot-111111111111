@@ -48,11 +48,11 @@ module.exports = {
         const proposerData = db.getUserData(proposer.id);
         const targetData = db.getUserData(target.id);
 
-        // فحص الزواج الحالي
-        if (proposerData.marriedTo) {
-            return message.reply(`❌ أنت متزوج بالفعل من <@${proposerData.marriedTo}>!\nاستخدم \`طلاق\` أولاً.`);
+        // فحص الزواج الحالي (يدعم الحقلين القديم والجديد)
+        if (proposerData.marriedTo || proposerData.partner) {
+            return message.reply(`❌ أنت متزوج بالفعل!\nاستخدم \`طلاق\` أولاً.`);
         }
-        if (targetData.marriedTo) {
+        if (targetData.marriedTo || targetData.partner) {
             return message.reply(`❌ ${target.username} متزوج/ة بالفعل!`);
         }
 
@@ -128,11 +128,11 @@ module.exports = {
             const proposerData = db.getUserData(proposerId);
             const targetData = db.getUserData(targetId);
 
-            // فحصات أخيرة
-            if (proposerData.marriedTo) {
+            // فحصات أخيرة (يدعم الحقلين القديم والجديد)
+            if (proposerData.marriedTo || proposerData.partner) {
                 return interaction.update({ content: '❌ المتقدم تزوج بالفعل!', embeds: [], components: [] });
             }
-            if (targetData.marriedTo) {
+            if (targetData.marriedTo || targetData.partner) {
                 return interaction.update({ content: '❌ ها خاين مو متزوج شعدك هنا', embeds: [], components: [] });
             }
             if ((proposerData.balance || 0) < MARRIAGE_COST) {
