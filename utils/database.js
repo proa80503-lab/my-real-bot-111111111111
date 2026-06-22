@@ -87,8 +87,8 @@ function _defaultUser() {
             biggestWin: 0
         },
         transactions: [],
-        partner: null,
-        marriageDate: null
+        marriedTo: null,
+        marriedSince: null
     };
 }
 
@@ -109,8 +109,19 @@ function getUserData(userId) {
     if (!u.stats) u.stats = { gamesPlayed: 0, gamesWon: 0, totalWagered: 0, totalWon: 0, biggestWin: 0 };
     if (!u.transactions) u.transactions = [];
     if (u.dailyStreak === undefined) u.dailyStreak = 0;
-    if (u.partner === undefined) u.partner = null;
-    if (u.marriageDate === undefined) u.marriageDate = null;
+    // ── ترقية صامتة: تحويل الحقول القديمة إلى الحقول الموحّدة ──
+    if (u.partner !== undefined && u.marriedTo === undefined) {
+        u.marriedTo = u.partner;
+        delete u.partner;
+        _dirty = true;
+    }
+    if (u.marriageDate !== undefined && u.marriedSince === undefined) {
+        u.marriedSince = u.marriageDate;
+        delete u.marriageDate;
+        _dirty = true;
+    }
+    if (u.marriedTo === undefined) u.marriedTo = null;
+    if (u.marriedSince === undefined) u.marriedSince = null;
 
     // ← إصلاح Bug: إذا كان inventory مصفوفة (بيانات قديمة) نحوله لـ object
     if (Array.isArray(u.inventory)) {
