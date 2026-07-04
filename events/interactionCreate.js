@@ -121,17 +121,13 @@ module.exports = {
                     const pollCmd = require('../commands/social/poll');
                     await pollCmd.handlePollInteraction(interaction);
                 }
-                // 🎨 Color buttons (from setup colors embed)
-                else if (id.startsWith('color_btn_')) {
-                    const colorName = id.replace('color_btn_', '');
-                    const colorRoles = require('../commands/moderation/color-roles');
-                    await colorRoles.assignColorRole(interaction, colorName);
-                }
-                // Color command buttons (from the الوان command)
-                else if (id.startsWith('color_') && !id.startsWith('colorole_')) {
-                    const colorName = id.replace('color_', '');
-                    const colorRoles = require('../commands/moderation/color-roles');
-                    await colorRoles.assignColorRole(interaction, colorName);
+                // 🎨 Color buttons — موحّد (color_btn_ و color_ ← نفس المعالج، إصلاح التعارض)
+                else if (id.startsWith('color_btn_') || (id.startsWith('color_') && !id.startsWith('colorole_'))) {
+                    const colorName = id.startsWith('color_btn_')
+                        ? id.replace('color_btn_', '')
+                        : id.replace('color_', '');
+                    const colorRolesFixed = require('../commands/moderation/color-roles');
+                    await colorRolesFixed.assignColorRole(interaction, colorName);
                 }
                 // ✅ Server Setup confirm/cancel
                 else if (id === 'setup_confirm' || id === 'setup_cancel') {
@@ -352,6 +348,7 @@ module.exports = {
                     if (marryModule.handleMarryInteraction) await marryModule.handleMarryInteraction(interaction);
                 }
                 // 🔨 Moderation confirmation buttons (ban/kick/warn/mute)
+                // تنسيق الـ customId: mod_confirm_type_targetId_authorId
                 else if (id.startsWith('mod_confirm_') || id.startsWith('mod_cancel_')) {
                     await modButtonsModule.handleModButton(interaction);
                 }
