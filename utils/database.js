@@ -1,17 +1,19 @@
 'use strict';
 
-const fs = require('fs');
+const fs   = require('fs');
 const path = require('path');
 
-const dbPath = path.join(__dirname, '../data/economy.json');
+const dbPath  = path.join(__dirname, '../data/economy.json');
+const tmpPath = dbPath + '.tmp';   // الكتابة أولاً هنا
+const bakPath = dbPath + '.bak';   // آخر نسخة سليمة
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Cache ذكي في الذاكرة — يقلل عمليات القراءة/الكتابة من مئات → عدد قليل/دورة
+// Cache ذكي — يقلل عمليات I/O من مئات إلى بضع دورات في الدقيقة
 // ─────────────────────────────────────────────────────────────────────────────
-let _cache = null; // البيانات الكاملة في الذاكرة
-let _dirty = false; // هل هناك تغييرات غير محفوظة؟
+let _cache = null;   // البيانات الكاملة في الذاكرة
+let _dirty = false;  // هل هناك تغييرات غير محفوظة؟
 
-// قراءة الملف مرة واحدة فقط عند التشغيل
+// قراءة الملف مرة واحدة عند أول طلب
 function _ensureCache() {
     if (_cache) return;
     try {
@@ -20,31 +22,60 @@ function _ensureCache() {
             _cache = JSON.parse(raw);
         }
     } catch (e) {
-        console.error('[DB] خطأ في تحميل قاعدة البيانات:', e.message);
+        // محاولة استعادة النسخة الاحتياطية عند تلف الملف الرئيسي
+        console.error('[DB] ⚠️ تعذّر قراءة قاعدة البيانات — محاولة استعادة النسخة الاحتياطية...', e.message);
+        try {
+            if (fs.existsSync(bakPath)) {
+                const raw = fs.readFileSync(bakPath, 'utf8');
+                _cache = JSON.parse(raw);
+                console.log('[DB] ✅ تم استعادة النسخة الاحتياطية بنجاح.');
+            }
+        } catch (e2) {
+            console.error('[DB] ❌ فشل استعادة النسخة الاحتياطية:', e2.message);
+        }
     }
     if (!_cache || typeof _cache !== 'object') _cache = { users: {}, guilds: {} };
-    if (!_cache.users) _cache.users = {};
+    if (!_cache.users)  _cache.users  = {};
     if (!_cache.guilds) _cache.guilds = {};
 }
 
-// حفظ محمي بـ try/catch
+// ─── حفظ atomic — يكتب على ملف مؤقت ثم يُعيد تسميته ─────────────────────────
 function _flush() {
     if (!_dirty || !_cache) return;
     try {
-        fs.writeFileSync(dbPath, JSON.stringify(_cache, null, 2), 'utf8');
+        const data = JSON.stringify(_cache, null, 2);
+
+        // 1. كتابة الملف المؤقت
+        fs.writeFileSync(tmpPath, data, 'utf8');
+
+        // 2. نسخ الملف الحالي كـ backup (صامت إذا لم يكن موجوداً)
+        if (fs.existsSync(dbPath)) {
+            fs.copyFileSync(dbPath, bakPath);
+        }
+
+        // 3. الاستبدال الآمن (atomic على أغلب الأنظمة)
+        fs.renameSync(tmpPath, dbPath);
+
         _dirty = false;
     } catch (e) {
-        console.error('[DB] خطأ في حفظ قاعدة البيانات:', e.message);
+        console.error('[DB] ❌ خطأ في حفظ قاعدة البيانات:', e.message);
+        // محاولة حفظ مباشر كخطة بديلة
+        try {
+            fs.writeFileSync(dbPath, JSON.stringify(_cache, null, 2), 'utf8');
+            _dirty = false;
+        } catch (e2) {
+            console.error('[DB] ❌ فشل الحفظ البديل أيضاً:', e2.message);
+        }
     }
 }
 
-// حفظ دوري كل 30 ثانية
-const _saveInterval = setInterval(_flush, 30000);
-_saveInterval.unref?.(); // لا يمنع إغلاق البوت
+// ─── حفظ دوري كل 30 ثانية ────────────────────────────────────────────────────
+const _saveInterval = setInterval(_flush, 30_000);
+_saveInterval.unref?.();
 
-// حفظ نهائي عند إغلاق البوت
+// ─── حفظ عند إغلاق البوت ─────────────────────────────────────────────────────
 function saveAll() { _flush(); }
-process.on('SIGINT', () => { saveAll(); process.exit(0); });
+process.on('SIGINT',  () => { saveAll(); process.exit(0); });
 process.on('SIGTERM', () => { saveAll(); process.exit(0); });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -62,39 +93,40 @@ function saveDatabase(db) {
     return true;
 }
 
-// القيم الافتراضية لمستخدم جديد
+// ─── القيم الافتراضية لمستخدم جديد ──────────────────────────────────────────
 function _defaultUser() {
     return {
-        balance: 1000,
-        bank: 0,
-        lastDaily: null,
-        lastWeekly: null,
-        lastWork: null,
-        lastRob: null,
-        dailyStreak: 0,
-        inventory: {}, // ← object وليس array (مهم!)
-        warnings: 0,
-        jailTime: null,
-        muteTime: null,
-        xp: 0,
-        level: 1,
+        balance:      1000,
+        bank:         0,
+        lastDaily:    null,
+        lastWeekly:   null,
+        lastWork:     null,
+        lastRob:      null,
+        dailyStreak:  0,
+        inventory:    {},
+        warnings:     0,
+        jailTime:     null,
+        muteTime:     null,
+        xp:           0,
+        level:        1,
         achievements: [],
         stats: {
-            gamesPlayed: 0,
-            gamesWon: 0,
-            totalWagered: 0,
-            totalWon: 0,
-            biggestWin: 0
+            gamesPlayed:   0,
+            gamesWon:      0,
+            totalWagered:  0,
+            totalWon:      0,
+            biggestWin:    0,
         },
         transactions: [],
-        marriedTo: null,
-        marriedSince: null
+        marriedTo:    null,
+        marriedSince: null,
     };
 }
 
-// الحصول على بيانات المستخدم (قراءة من الـ Cache)
+// ─── الحصول على بيانات المستخدم ───────────────────────────────────────────────
 function getUserData(userId) {
     _ensureCache();
+
     if (!_cache.users[userId]) {
         _cache.users[userId] = _defaultUser();
         _dirty = true;
@@ -102,14 +134,18 @@ function getUserData(userId) {
 
     const u = _cache.users[userId];
 
-    // ترقية البيانات القديمة بشكل صامت
-    if (u.xp === undefined) u.xp = 0;
-    if (!u.level) u.level = 1;
-    if (!u.achievements) u.achievements = [];
-    if (!u.stats) u.stats = { gamesPlayed: 0, gamesWon: 0, totalWagered: 0, totalWon: 0, biggestWin: 0 };
-    if (!u.transactions) u.transactions = [];
-    if (u.dailyStreak === undefined) u.dailyStreak = 0;
-    // ── ترقية صامتة: تحويل الحقول القديمة إلى الحقول الموحّدة ──
+    // ── ترقية صامتة للبيانات القديمة ──────────────────────────────────────
+    if (u.xp           === undefined) { u.xp           = 0;    _dirty = true; }
+    if (!u.level)                     { u.level         = 1;    _dirty = true; }
+    if (!u.achievements)              { u.achievements  = [];   _dirty = true; }
+    if (!u.transactions)              { u.transactions  = [];   _dirty = true; }
+    if (u.dailyStreak  === undefined) { u.dailyStreak   = 0;    _dirty = true; }
+    if (!u.stats) {
+        u.stats = { gamesPlayed: 0, gamesWon: 0, totalWagered: 0, totalWon: 0, biggestWin: 0 };
+        _dirty = true;
+    }
+
+    // دمج حقول partner القديمة → marriedTo الجديدة
     if (u.partner !== undefined && u.marriedTo === undefined) {
         u.marriedTo = u.partner;
         delete u.partner;
@@ -120,19 +156,19 @@ function getUserData(userId) {
         delete u.marriageDate;
         _dirty = true;
     }
-    if (u.marriedTo === undefined) u.marriedTo = null;
-    if (u.marriedSince === undefined) u.marriedSince = null;
+    if (u.marriedTo   === undefined) { u.marriedTo   = null; _dirty = true; }
+    if (u.marriedSince === undefined) { u.marriedSince = null; _dirty = true; }
 
-    // ← إصلاح Bug: إذا كان inventory مصفوفة (بيانات قديمة) نحوله لـ object
+    // إصلاح inventory array قديم → object
     if (Array.isArray(u.inventory)) {
-        const newInv = {};
+        const obj = {};
         for (const item of u.inventory) {
-            if (item && item.id) newInv[item.id] = item;
+            if (item?.id) obj[item.id] = item;
         }
-        u.inventory = newInv;
+        u.inventory = obj;
         _dirty = true;
     }
-    if (!u.inventory || typeof u.inventory !== 'object') {
+    if (!u.inventory || typeof u.inventory !== 'object' || Array.isArray(u.inventory)) {
         u.inventory = {};
         _dirty = true;
     }
@@ -140,7 +176,7 @@ function getUserData(userId) {
     return u;
 }
 
-// تحديث بيانات المستخدم بصيغة دمج
+// ─── تحديث بيانات المستخدم بالكامل (merge) ────────────────────────────────────
 function updateUserData(userId, data) {
     _ensureCache();
     if (!_cache.users[userId]) getUserData(userId);
@@ -149,7 +185,7 @@ function updateUserData(userId, data) {
     return _cache.users[userId];
 }
 
-// تحديث حقول محددة فقط (Atomic-like)
+// ─── تحديث حقول محددة فقط (أكثر أماناً — لا يُضيّع حقولاً أخرى) ─────────────
 function updateFields(userId, fields) {
     _ensureCache();
     if (!_cache.users[userId]) getUserData(userId);
@@ -160,7 +196,7 @@ function updateFields(userId, fields) {
     return _cache.users[userId];
 }
 
-// إضافة أموال
+// ─── إضافة أموال ─────────────────────────────────────────────────────────────
 function addMoney(userId, amount) {
     _ensureCache();
     if (!_cache.users[userId]) getUserData(userId);
@@ -169,7 +205,7 @@ function addMoney(userId, amount) {
     return _cache.users[userId];
 }
 
-// خصم أموال
+// ─── خصم أموال (يعيد false إن لم يكفِ الرصيد) ────────────────────────────────
 function removeMoney(userId, amount) {
     _ensureCache();
     if (!_cache.users[userId]) getUserData(userId);
@@ -179,7 +215,7 @@ function removeMoney(userId, amount) {
     return true;
 }
 
-// تحويل أموال بين مستخدمين
+// ─── تحويل أموال بين مستخدمين ─────────────────────────────────────────────────
 function transferMoney(fromId, toId, amount) {
     _ensureCache();
     const from = getUserData(fromId);
@@ -191,42 +227,44 @@ function transferMoney(fromId, toId, amount) {
     return true;
 }
 
-// إضافة معاملة لسجل المعاملات (آخر 20 معاملة)
+// ─── سجل المعاملات (آخر 25 فقط) ──────────────────────────────────────────────
 function addTransaction(userId, type, amount, description) {
     _ensureCache();
     if (!_cache.users[userId]) getUserData(userId);
     if (!_cache.users[userId].transactions) _cache.users[userId].transactions = [];
+
     _cache.users[userId].transactions.unshift({
-        type, amount, description, timestamp: Date.now()
+        type, amount, description, timestamp: Date.now(),
     });
-    if (_cache.users[userId].transactions.length > 20) {
-        _cache.users[userId].transactions.length = 20;
+
+    // احتفظ بآخر 25 فقط
+    if (_cache.users[userId].transactions.length > 25) {
+        _cache.users[userId].transactions.length = 25;
     }
     _dirty = true;
 }
 
-// الحصول على بيانات السيرفر
+// ─── بيانات السيرفر ───────────────────────────────────────────────────────────
 function getGuildData(guildId) {
     _ensureCache();
     if (!_cache.guilds[guildId]) {
         _cache.guilds[guildId] = {
-            bankChannel: null,
-            jailRole: null,
-            muteRole: null,
-            logChannel: null,
+            bankChannel:        null,
+            jailRole:           null,
+            muteRole:           null,
+            logChannel:         null,
             punishmentsChannel: null,
-            gamesChannel: null,
-            setupComplete: false
+            gamesChannel:       null,
+            setupComplete:      false,
         };
         _dirty = true;
     }
     const g = _cache.guilds[guildId];
-    if (!('punishmentsChannel' in g)) g.punishmentsChannel = null;
-    if (!('gamesChannel' in g)) g.gamesChannel = null;
+    if (!('punishmentsChannel' in g)) { g.punishmentsChannel = null; _dirty = true; }
+    if (!('gamesChannel'       in g)) { g.gamesChannel       = null; _dirty = true; }
     return g;
 }
 
-// تحديث بيانات السيرفر
 function updateGuildData(guildId, data) {
     _ensureCache();
     if (!_cache.guilds[guildId]) getGuildData(guildId);
@@ -235,7 +273,7 @@ function updateGuildData(guildId, data) {
     return _cache.guilds[guildId];
 }
 
-// الحصول على جميع المستخدمين
+// ─── قراءة كل المستخدمين ─────────────────────────────────────────────────────
 function getAllUsers() {
     _ensureCache();
     return _cache.users;
@@ -254,5 +292,5 @@ module.exports = {
     addTransaction,
     getGuildData,
     updateGuildData,
-    getAllUsers
+    getAllUsers,
 };
