@@ -17,9 +17,11 @@ const dailyChallenges = require('../utils/daily-challenges');
 let analytics = null;
 let advSecurity = null;
 let personaEngine = null;
+let _achievementsCmd = null; // محمّل مرة واحدة فقط ← تحسين الأداء
 try { analytics = require('../utils/analytics'); } catch { /* اختياري */ }
 try { advSecurity = require('../utils/advanced-security'); } catch { /* اختياري */ }
 try { personaEngine = require('../utils/persona-engine').personaEngine; } catch { /* اختياري */ }
+try { _achievementsCmd = require('../commands/main/achievements-cmd'); } catch { /* اختياري */ }
 
 // ─── أوامر الموسيقى المختصرة ───────────────────────────────────────────────
 let musicCmd = null;
@@ -117,9 +119,8 @@ module.exports = {
                 const profile = advSecurity?.getProfile(message.author.id);
                 profile?.addMessage(message);
 
-                // كشف الساعات الخاصة (إنجازات)
-                const { checkAchievements } = require('../commands/main/achievements-cmd');
-                checkAchievements(message.author.id, 'night_owl', {}, message).catch(() => {});
+                // كشف الساعات الخاصة (إنجازات) — محمّل مرة واحدة من أعلى
+                _achievementsCmd?.checkAchievements?.(message.author.id, 'night_owl', {}, message).catch(() => {});
             } catch { /* silent */ }
         }
 
