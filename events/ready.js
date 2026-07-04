@@ -2,129 +2,136 @@ const { Events, ActivityType } = require('discord.js');
 const autoTasks = require('../utils/auto-tasks');
 const ghostPing = require('../utils/ghost-ping');
 
-// ── الأنظمة الجديدة ────────────────────────────────────────────────────────────────────────────────
+// ── الأنظمة الاختيارية ─────────────────────────────────────────────────────
 let analytics = null;
 let botEvents = null;
-let smartCaches = null;
 try { analytics = require('../utils/analytics'); } catch {}
 try { ({ botEvents } = require('../utils/event-system')); } catch {}
-try { smartCaches = require('../utils/smart-cache'); } catch {}
 
 module.exports = {
     name: Events.ClientReady,
     once: true,
+
     async execute(client) {
-        // ─── رسالة الترحيب الاحترافية في الـ console ───────────────
-        const guildCount = client.guilds.cache.size;
-        const userCount = client.users.cache.size;
+        const guildCount   = client.guilds.cache.size;
+        const userCount    = client.users.cache.size;
+        const commandCount = client.commands?.size ?? '?';
 
-        console.log('\n');
-        console.log('╔══════════════════════════════════════════════╗');
-        console.log(`║  🤖  ${client.user.tag.padEnd(38)} ║`);
-        console.log('╠══════════════════════════════════════════════╣');
-        console.log(`║  🌐  السيرفرات: ${String(guildCount).padEnd(28)} ║`);
-        console.log(`║  👥  المستخدمون: ${String(userCount).padEnd(27)} ║`);
-        console.log(`║  ⚡  الحالة: Online & Ready!                 ║`);
-        console.log('╚══════════════════════════════════════════════╝');
-        console.log('');
+        // ─── رسالة الترحيب في الـ console ────────────────────────────
+        const LINE = '═'.repeat(48);
+        console.log(`\n╔${LINE}╗`);
+        console.log(`║  🤖  ${client.user.tag.padEnd(42)}║`);
+        console.log(`╠${LINE}╣`);
+        console.log(`║  🌐  السيرفرات : ${String(guildCount).padEnd(29)}║`);
+        console.log(`║  👥  المستخدمون: ${String(userCount).padEnd(29)}║`);
+        console.log(`║  ⚡  الأوامر   : ${String(commandCount).padEnd(29)}║`);
+        console.log(`║  ✅  الحالة    : Online & Ready!               ║`);
+        console.log(`╚${LINE}╝\n`);
 
-        // ─── تحميل الحالة المحفوظة ───────────────────────────────
+        // ─── تحميل الحالة المحفوظة ─────────────────────────────────
         try {
-            const fs = require('fs');
+            const fs   = require('fs');
             const path = require('path');
             const statusPath = path.join(__dirname, '../data/status.json');
+
             if (fs.existsSync(statusPath)) {
                 const s = JSON.parse(fs.readFileSync(statusPath, 'utf8'));
                 const typeMap = {
-                    'PLAYING': ActivityType.Playing,
-                    'WATCHING': ActivityType.Watching,
-                    'LISTENING': ActivityType.Listening,
-                    'COMPETING': ActivityType.Competing
+                    PLAYING:   ActivityType.Playing,
+                    WATCHING:  ActivityType.Watching,
+                    LISTENING: ActivityType.Listening,
+                    COMPETING: ActivityType.Competing,
                 };
                 const actType = typeMap[s.type] ?? ActivityType.Watching;
-                client.user.setPresence({ activities: [{ name: s.text, type: actType }], status: s.status || 'online' });
+                client.user.setPresence({
+                    activities: [{ name: s.text, type: actType }],
+                    status: s.status || 'online',
+                });
                 console.log(`✅ [Status] ${s.type}: ${s.text}`);
             } else {
-                client.user.setPresence({ activities: [{ name: '!help • اكتب help للمساعدة', type: ActivityType.Watching }], status: 'online' });
+                client.user.setPresence({
+                    activities: [{ name: '!help • اكتب help', type: ActivityType.Watching }],
+                    status: 'online',
+                });
             }
         } catch (e) {
-            console.error('[Ready] Error loading status:', e.message);
-            client.user.setPresence({ activities: [{ name: '!help للمساعدة', type: ActivityType.Watching }], status: 'online' });
+            console.error('[Ready] خطأ في تحميل الحالة:', e.message);
+            client.user.setPresence({
+                activities: [{ name: 'help • للمساعدة', type: ActivityType.Watching }],
+                status: 'online',
+            });
         }
 
-        // ─── المهام التلقائية ────────────────────────────────────
+        // ─── المهام التلقائية ────────────────────────────────────────
         try {
             autoTasks.initializeAutoTasks(client);
-            console.log('🤖 [AutoTasks] تم تفعيل المهام التلقائية');
-        } catch (error) {
-            console.error('[AutoTasks] خطأ:', error.message);
+            console.log('🤖 [AutoTasks] المهام التلقائية مفعّلة');
+        } catch (err) {
+            console.error('[AutoTasks] خطأ:', err.message);
         }
 
-        // ─── المنشن الوهمي ───────────────────────────────────────
+        // ─── المنشن الوهمي ──────────────────────────────────────────
         try {
             ghostPing.initialize(client);
-            console.log('👻 [GhostPing] تم تفعيل نظام المنشن الوهمي');
+            console.log('👻 [GhostPing] مفعّل');
         } catch (e) {
             console.warn('[GhostPing] خطأ:', e.message);
         }
 
-        // ─── تحديث قنوات الشركات (بعد 3 ثوانٍ) ──────────────────
+        // ─── تحديث قنوات الشركات (بعد 3 ثوانٍ) ────────────────────
         setTimeout(async () => {
             try {
                 const companyModule = require('../commands/economy/company');
                 for (const guild of client.guilds.cache.values()) {
                     await companyModule.refreshCompaniesChannel(guild).catch(() => {});
                 }
-                console.log('🏢 [Companies] تم تحديث قنوات الشركات');
+                console.log('🏢 [Companies] قنوات الشركات محدَّثة');
             } catch (err) {
                 console.warn('[Companies] خطأ:', err.message);
             }
-        }, 3000);
+        }, 3_000);
 
-        // ─── إشعار المالك عبر DM (بعد 5 ثوانٍ) ──────────────────
+        // ─── إشعار المالك عبر DM (بعد 5 ثوانٍ) ────────────────────
         setTimeout(async () => {
             try {
                 const ownerDashboard = require('../commands/main/owner-dashboard');
                 await ownerDashboard.notifyOwnerOnStartup(client);
-                console.log('👑 [Owner] تم إرسال إشعار البدء للمالك');
+                console.log('👑 [Owner] تم إرسال إشعار البدء');
             } catch (e) {
                 console.warn('[Owner] لم يتم إرسال إشعار البدء:', e.message);
             }
-        }, 5000);
+        }, 5_000);
 
-        // ─── تحديث لوحة المتصدرين تلقائياً (بعد 10 ثواني) ───
+        // ─── تحديث المتصدرين تلقائياً (بعد 10 ثوانٍ) ──────────────
         setTimeout(async () => {
             try {
                 const leaderboard = require('../commands/main/leaderboard');
                 leaderboard.startAutoUpdate(client, 30); // كل 30 دقيقة
-                console.log('🏆 [Leaderboard] تفعيل التحديث التلقائي للصدارة كل 30 دقيقة');
+                console.log('🏆 [Leaderboard] التحديث التلقائي كل 30 دقيقة');
             } catch (e) {
-                console.warn('[Leaderboard] خطأ في التحديث التلقائي:', e.message);
+                console.warn('[Leaderboard] خطأ:', e.message);
             }
-        }, 10000);
+        }, 10_000);
 
-        // ── تهيئة الأنظمة الجديدة (15 ثانية) ─────────────────────────────────────
+        // ─── تهيئة الأنظمة المتقدمة (بعد 15 ثانية) ────────────────
         setTimeout(() => {
             try {
-                // تسجيل بدء تشغيل البوت في التحليلات
-                analytics?.trackEvent('bot_start', {
-                    guilds: client.guilds.cache.size,
-                    users: client.users.cache.size,
-                    tag: client.user.tag
+                analytics?.trackEvent?.('bot_start', {
+                    guilds:   client.guilds.cache.size,
+                    users:    client.users.cache.size,
+                    commands: client.commands?.size ?? 0,
+                    tag:      client.user.tag,
                 });
 
-                // إطلاق حدث البدء
-                botEvents?.fire('bot:ready', { client });
+                botEvents?.fire?.('bot:ready', { client });
 
-                console.log('🚀 [NextGen Systems] تم تهيئة الأنظمة الجديدة:');
-                console.log('   📊 Analytics Engine ✔️');
-                console.log('   🧠 Persona Engine ✔️');
+                console.log('🚀 [Systems] الأنظمة المتقدمة:');
+                console.log('   📊 Analytics Engine  ✔️');
                 console.log('   🛡️ Advanced Security ✔️');
-                console.log('   ⚡ Smart Cache ✔️');
-                console.log('   🎛️ Event System ✔️');
+                console.log('   🎛️ Event System      ✔️');
             } catch (e) {
-                console.warn('[NextGen] خطأ في تهيئة الأنظمة:', e.message);
+                console.warn('[Systems] خطأ:', e.message);
             }
-        }, 15000);
+        }, 15_000);
     },
 };
