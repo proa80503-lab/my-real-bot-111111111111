@@ -1,73 +1,92 @@
 'use strict';
 
-const { EmbedBuilder } = require('discord.js');
 const db = require('./database');
 const config = require('../config');
+const { EmbedBuilder } = require('discord.js');
 
-// حساب XP المطلوب للمستوى التالي
+// ─── حساب XP المطلوب للمستوى التالي (منحنى تدريجي) ─────────────────────────
 function getXPForLevel(level) {
     return Math.floor(100 * Math.pow(1.5, level - 1));
 }
 
-// حساب المستوى من XP الكلي
-function getLevelFromXP(xp) {
+// ─── حساب المستوى من XP الكلي ────────────────────────────────────────────────
+function getLevelFromXP(totalXP) {
     let level = 1;
     let accumulated = 0;
     while (true) {
         const needed = getXPForLevel(level);
-        if (accumulated + needed > xp) break;
+        if (accumulated + needed > totalXP) break;
         accumulated += needed;
         level++;
     }
     return level;
 }
 
-// إضافة XP للمستخدم
+// ─── إضافة XP للمستخدم ──────────────────────────────────────────────────────
+// إصلاح: يستخدم updateFields بدل updateUserData لتجنب الكتابة الزائدة
 function addXP(userId, amount, message = null) {
     const userData = db.getUserData(userId);
     const oldLevel = userData.level || 1;
+    const newXP = (userData.xp || 0) + amount;
+    const newLevel = getLevelFromXP(newXP);
 
-    userData.xp = (userData.xp || 0) + amount;
-    const newLevel = getLevelFromXP(userData.xp);
+    // حقول التحديث الأساسية
+    const updates = { xp: newXP };
     let reward = 0;
 
     if (newLevel > oldLevel) {
-        userData.level = newLevel;
+        updates.level = newLevel;
 
-        // مكافأة Level Up متدرجة
-        reward = config.levelUpReward;
+        // مكافأة ترقية متدرجة
+        reward = config.levelUpReward || 500;
         if (newLevel % 5 === 0) reward += 1000;
-        if (newLevel % 10 === 0) reward += config.bigLevelReward;
+        if (newLevel % 10 === 0) reward += config.bigLevelReward || 2000;
 
-        userData.balance = (userData.balance || 0) + reward;
+        // إضافة المكافأة للرصيد
+        const currentBalance = userData.balance || 0;
+        updates.balance = currentBalance + reward;
 
-        // إشعار Level Up في القناة
+        // إشعار المستوى في القناة
         if (message?.channel) {
-            const levelUpEmbed = new EmbedBuilder()
+            const lvlEmbed = new EmbedBuilder()
                 .setColor('#FFD700')
                 .setTitle('🎉 ترقية مستوى!')
-                .setDescription(`تهانينا ${message.author}! وصلت إلى **المستوى ${newLevel}**!`)
+                .setDescription(
+                    [
+                        `> تهانينا ${message.author}! وصلت إلى **المستوى ${newLevel}**!`,
+                        `> 🎁 مكافأة الترقية: **${reward.toLocaleString()} ${config.currency}**`,
+                    ].join('\n')
+                )
                 .addFields(
-                    { name: 'المكافأة', value: `${reward} ${config.currency}`, inline: true },
-                    { name: 'XP الكلي', value: `${userData.xp}`, inline: true }
+                    { name: '⭐ XP الكلي', value: `${newXP.toLocaleString()}`, inline: true },
+                    { name: '🏆 المستوى الجديد', value: `${newLevel}`, inline: true }
                 )
                 .setThumbnail(message.author.displayAvatarURL())
                 .setTimestamp();
 
-            message.channel.send({ embeds: [levelUpEmbed] }).catch(() => { });
+            message.channel.send({ embeds: [lvlEmbed] }).catch(() => {});
         }
     }
 
-    db.updateUserData(userId, userData);
-    return { leveledUp: newLevel > oldLevel, newLevel, oldLevel, reward };
+    // حفظ حقول محددة فقط — لا يُعيد كتابة الكائن كله
+    db.updateFields(userId, updates);
+
+    return {
+        leveledUp: newLevel > oldLevel,
+        newLevel,
+        oldLevel,
+        reward,
+        newXP,
+    };
 }
 
-// الحصول على تقدم المستوى
+// ─── الحصول على تقدم المستوى ──────────────────────────────────────────────────
 function getLevelProgress(userId) {
     const userData = db.getUserData(userId);
     const currentLevel = userData.level || 1;
     const currentXP = userData.xp || 0;
 
+    // XP المتراكم حتى المستوى الحالي
     let xpForCurrentLevel = 0;
     for (let i = 1; i < currentLevel; i++) {
         xpForCurrentLevel += getXPForLevel(i);
@@ -88,21 +107,22 @@ function getLevelProgress(userId) {
     };
 }
 
-// إنشاء progress bar نصي
+// ─── شريط التقدم النصي ───────────────────────────────────────────────────────
 function createProgressBar(percentage, length = 10) {
-    const filled = Math.round((percentage / 100) * length);
-    return '█'.repeat(Math.max(0, filled)) + '░'.repeat(Math.max(0, length - filled));
+    const filled = Math.max(0, Math.round((percentage / 100) * length));
+    const empty = Math.max(0, length - filled);
+    return '█'.repeat(filled) + '░'.repeat(empty);
 }
 
-// الحصول على رتبة المستخدم (async لأن بعض الأوامر تستخدم .then()/.catch())
+// ─── رتبة المستخدم عالمياً ────────────────────────────────────────────────────
 async function getUserRank(userId) {
     const allUsers = db.loadDatabase().users;
     const sorted = Object.entries(allUsers)
         .map(([id, data]) => ({ id, xp: data.xp || 0 }))
         .sort((a, b) => b.xp - a.xp);
 
-    const rank = sorted.findIndex(u => u.id === userId) + 1;
-    return rank || 'غير مصنف';
+    const rank = sorted.findIndex((u) => u.id === userId) + 1;
+    return rank > 0 ? rank : null;
 }
 
 module.exports = {
