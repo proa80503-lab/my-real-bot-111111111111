@@ -1,78 +1,95 @@
 'use strict';
 
-/**
- * ╔══════════════════════════════════════════════════════════════════════════╗
- * ║  🔨⚠️👢🔇 أوامر الإدارة v3.0 — بتأكيد الأزرار الاحترافية             ║
- * ║  ban | kick | mute | warn — تأكيد قبل التنفيذ + سجل بصري             ║
- * ╚══════════════════════════════════════════════════════════════════════════╝
- */
-
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags, PermissionFlagsBits } = require('discord.js');
 const db = require('../../utils/database');
 const { hasPermOrOwner, getAuthor } = require('../../utils/permissions');
 
-// ─── معالج مشترك للتأكيد ─────────────────────────────────────────────────────
-const pendingActions = new Map(); // msgId → ActionData
+// ─── طلبات التأكيد المعلقة ─────────────────────────────────────────────────
+// المفتاح: msgId → ActionData
+const pendingActions = new Map();
 
+// تنظيف تلقائي كل 10 دقائق
+const _cleanup = setInterval(() => {
+    const now = Date.now();
+    for (const [msgId, data] of pendingActions) {
+        if (now - data.createdAt > 35_000) pendingActions.delete(msgId);
+    }
+}, 10 * 60 * 1000);
+_cleanup.unref?.();
+
+// ─── بناء embed التأكيد ──────────────────────────────────────────────────────
 async function requestConfirmation(message, action) {
-    const { type, target, reason, author, cost } = action;
+    const { type, target, reason, author } = action;
 
-    const icons = { ban: '🔨', kick: '👢', mute: '🔇', warn: '⚠️', jail: '🔒' };
-    const colors = { ban: '#ED4245', kick: '#E67E22', mute: '#FEE75C', warn: '#FFA500', jail: '#95A5A6' };
-    const labels = { ban: 'حظر نهائي', kick: 'طرد', mute: 'كتم', warn: 'تحذير', jail: 'سجن' };
+    const META = {
+        ban:  { icon: '🔨', color: '#ED4245', label: 'حظر نهائي' },
+        kick: { icon: '👢', color: '#E67E22', label: 'طرد'       },
+        mute: { icon: '🔇', color: '#FEE75C', label: 'كتم'       },
+        warn: { icon: '⚠️',  color: '#FFA500', label: 'تحذير'    },
+        jail: { icon: '🔒', color: '#95A5A6', label: 'سجن'       },
+    };
+    const m = META[type] || META.ban;
 
     const embed = new EmbedBuilder()
-        .setColor(colors[type] || '#ED4245')
-        .setTitle(`${icons[type]} تأكيد ${labels[type]}`)
-        .setDescription([
-            `> **العضو:** ${target}`,
-            `> **السبب:** ${reason || 'بدون سبب'}`,
-            `> **المسؤول:** ${author}`,
-            '',
-            `> ⚠️ **هل أنت متأكد من تنفيذ هذا الإجراء؟**`,
-        ].join('\n'))
+        .setColor(m.color)
+        .setTitle(`${m.icon} تأكيد — ${m.label}`)
+        .setDescription(
+            [
+                `> **العضو:** ${target}`,
+                `> **السبب:** ${reason || 'بدون سبب محدد'}`,
+                `> **المسؤول:** ${author}`,
+                '',
+                `> ⚠️ هل تريد تنفيذ هذا الإجراء؟`,
+            ].join('\n')
+        )
         .setThumbnail(target.displayAvatarURL?.() || null)
         .setFooter({ text: '⏰ ينتهي التأكيد بعد 30 ثانية' });
 
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(`mod_confirm_${type}_${target.id}`)
-            .setLabel(`✅ نعم، ${labels[type]}`)
+            .setCustomId(`mod_confirm_${type}_${target.id}_${author.id}`)
+            .setLabel(`✅ ${m.label}`)
             .setStyle(type === 'warn' ? ButtonStyle.Primary : ButtonStyle.Danger),
         new ButtonBuilder()
-            .setCustomId(`mod_cancel_${type}_${target.id}`)
+            .setCustomId(`mod_cancel_${type}_${target.id}_${author.id}`)
             .setLabel('❌ إلغاء')
-            .setStyle(ButtonStyle.Secondary),
+            .setStyle(ButtonStyle.Secondary)
     );
 
     const msg = await message.reply({ embeds: [embed], components: [row] });
-    pendingActions.set(msg.id, { ...action, msg });
+    pendingActions.set(msg.id, { ...action, createdAt: Date.now(), authorId: author.id });
 
-    // انتهاء التأكيد
+    // إلغاء تلقائي بعد 30 ثانية
     setTimeout(() => {
-        if (pendingActions.has(msg.id)) {
-            pendingActions.delete(msg.id);
-            embed.setColor('#95A5A6').setDescription('> ⏰ **انتهى وقت التأكيد.**');
-            msg.edit({ embeds: [embed], components: [] }).catch(() => {});
-        }
-    }, 30000);
+        if (!pendingActions.has(msg.id)) return;
+        pendingActions.delete(msg.id);
+        embed.setColor('#95A5A6').setDescription('> ⏰ **انتهى وقت التأكيد — تم إلغاء الإجراء.**');
+        msg.edit({ embeds: [embed], components: [] }).catch(() => {});
+    }, 30_000);
 }
 
 // ─── بناء embed النتيجة ──────────────────────────────────────────────────────
 function buildResultEmbed(type, target, reason, author, extra = '') {
-    const icons = { ban: '🔨', kick: '👢', mute: '🔇', warn: '⚠️', jail: '🔒', unjail: '🔓', unmute: '🔊' };
-    const colors = { ban: '#ED4245', kick: '#E67E22', mute: '#FEE75C', warn: '#FFA500', jail: '#95A5A6', unjail: '#57F287', unmute: '#57F287' };
-    const labels = { ban: 'حظر نهائي', kick: 'طرد', mute: 'كتم', warn: 'تحذير', jail: 'سجن', unjail: 'إطلاق سراح', unmute: 'رفع الكتم' };
+    const META = {
+        ban:    { icon: '🔨', color: '#ED4245', label: 'حظر نهائي'   },
+        kick:   { icon: '👢', color: '#E67E22', label: 'طرد'          },
+        mute:   { icon: '🔇', color: '#FEE75C', label: 'كتم مؤقت'    },
+        warn:   { icon: '⚠️',  color: '#FFA500', label: 'تحذير'       },
+        jail:   { icon: '🔒', color: '#95A5A6', label: 'سجن'          },
+        unjail: { icon: '🔓', color: '#57F287', label: 'إطلاق سراح'  },
+        unmute: { icon: '🔊', color: '#57F287', label: 'رفع الكتم'   },
+    };
+    const m = META[type] || META.ban;
 
     return new EmbedBuilder()
-        .setColor(colors[type] || '#ED4245')
-        .setTitle(`${icons[type]} تم تنفيذ ${labels[type]}`)
+        .setColor(m.color)
+        .setTitle(`${m.icon} تم تنفيذ ${m.label}`)
         .addFields(
-            { name: '👤 العضو', value: `${target}`, inline: true },
-            { name: '📝 السبب', value: reason || 'بدون سبب', inline: true },
-            { name: '👮 المسؤول', value: `${author}`, inline: true },
+            { name: '👤 العضو',    value: `${target}`,             inline: true },
+            { name: '📝 السبب',    value: reason || 'بدون سبب',   inline: true },
+            { name: '👮 المسؤول',  value: `${author}`,             inline: true }
         )
-        .setFooter({ text: extra || `تم التنفيذ بنجاح` })
+        .setFooter({ text: extra || 'تم التنفيذ بنجاح' })
         .setTimestamp();
 }
 
@@ -89,19 +106,19 @@ module.exports.ban = {
         if (!hasPermOrOwner(message.member, PermissionFlagsBits.BanMembers)) {
             return message.reply({ content: '❌ ليس لديك صلاحية الحظر!', flags: MessageFlags.Ephemeral });
         }
-
         const target = message.mentions.members.first();
         if (!target) return message.reply('❌ منشن العضو المراد حظره!\nمثال: `ban @شخص السبب`');
-        if (!target.bannable) return message.reply('❌ لا يمكنني حظر هذا العضو!');
+        if (!target.bannable) return message.reply('❌ لا يمكنني حظر هذا العضو — قد يكون رتبته أعلى مني!');
+        if (target.id === message.author.id) return message.reply('❌ لا يمكنك حظر نفسك!');
 
         const reason = args.slice(1).join(' ') || 'لا يوجد سبب';
         await requestConfirmation(message, {
             type: 'ban', target: target.user, member: target,
-            reason, author: message.author, guild: message.guild
+            reason, author: message.author, guild: message.guild,
         });
     },
 
-    async handleModInteraction(interaction) { await handleModButton(interaction); }
+    async handleModInteraction(interaction) { await handleModButton(interaction); },
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -117,19 +134,19 @@ module.exports.kick = {
         if (!hasPermOrOwner(message.member, PermissionFlagsBits.KickMembers)) {
             return message.reply('❌ ليس لديك صلاحية الطرد!');
         }
-
         const target = message.mentions.members.first();
         if (!target) return message.reply('❌ منشن العضو المراد طرده!');
         if (!target.kickable) return message.reply('❌ لا يمكنني طرد هذا العضو!');
+        if (target.id === message.author.id) return message.reply('❌ لا يمكنك طرد نفسك!');
 
         const reason = args.slice(1).join(' ') || 'لا يوجد سبب';
         await requestConfirmation(message, {
             type: 'kick', target: target.user, member: target,
-            reason, author: message.author, guild: message.guild
+            reason, author: message.author, guild: message.guild,
         });
     },
 
-    async handleModInteraction(interaction) { await handleModButton(interaction); }
+    async handleModInteraction(interaction) { await handleModButton(interaction); },
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -145,19 +162,18 @@ module.exports.warn = {
         if (!hasPermOrOwner(message.member, PermissionFlagsBits.ModerateMembers)) {
             return message.reply('❌ ليس لديك صلاحية التحذير!');
         }
-
         const target = message.mentions.members.first();
-        if (!target) return message.reply('❌ منشن العضو!');
+        if (!target) return message.reply('❌ منشن العضو المراد تحذيره!');
         if (target.id === message.author.id) return message.reply('❌ لا يمكنك تحذير نفسك!');
 
         const reason = args.slice(1).join(' ') || 'لا يوجد سبب';
         await requestConfirmation(message, {
             type: 'warn', target: target.user, member: target,
-            reason, author: message.author, guild: message.guild
+            reason, author: message.author, guild: message.guild,
         });
     },
 
-    async handleModInteraction(interaction) { await handleModButton(interaction); }
+    async handleModInteraction(interaction) { await handleModButton(interaction); },
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -166,35 +182,48 @@ module.exports.warn = {
 module.exports.mute = {
     name: 'mute',
     aliases: ['كتم', 'صمت'],
-    description: 'كتم عضو (مع تأكيد)',
+    description: 'كتم عضو مؤقتاً (مع تأكيد)',
     usage: 'mute @user [السبب]',
 
     async execute(message, args) {
         if (!hasPermOrOwner(message.member, PermissionFlagsBits.ModerateMembers)) {
             return message.reply('❌ ليس لديك صلاحية الكتم!');
         }
-
         const target = message.mentions.members.first();
-        if (!target) return message.reply('❌ منشن العضو!');
+        if (!target) return message.reply('❌ منشن العضو المراد كتمه!');
         if (!target.moderatable) return message.reply('❌ لا يمكنني كتم هذا العضو!');
+        if (target.id === message.author.id) return message.reply('❌ لا يمكنك كتم نفسك!');
 
         const reason = args.slice(1).join(' ') || 'لا يوجد سبب';
         await requestConfirmation(message, {
             type: 'mute', target: target.user, member: target,
             reason, author: message.author, guild: message.guild,
-            duration: 10 * 60 * 1000 // 10 دقائق افتراضياً
+            duration: 10 * 60 * 1000, // 10 دقائق افتراضياً
         });
     },
 
-    async handleModInteraction(interaction) { await handleModButton(interaction); }
+    async handleModInteraction(interaction) { await handleModButton(interaction); },
 };
 
-// ─── معالج الأزرار الموحّد ────────────────────────────────────────────────────
+// ─── معالج الأزرار الموحّد ─────────────────────────────────────────────────
 async function handleModButton(interaction) {
     const id = interaction.customId;
     if (!id.startsWith('mod_confirm_') && !id.startsWith('mod_cancel_')) return;
 
-    // فحص الصلاحيات
+    // استخراج authorId من الـ customId (المنسق: mod_confirm_type_targetId_authorId)
+    const parts = id.split('_');
+    // parts = ['mod','confirm'/'cancel', type, targetId, authorId]
+    const authorId = parts[4];
+
+    // تحقق: فقط صاحب الأمر الأصلي يستطيع تأكيده
+    if (authorId && interaction.user.id !== authorId) {
+        return interaction.reply({
+            content: '❌ فقط من أصدر هذا الأمر يمكنه تأكيده أو إلغاؤه.',
+            flags: MessageFlags.Ephemeral,
+        });
+    }
+
+    // فحص صلاحيات عامة
     if (!hasPermOrOwner(interaction.member, PermissionFlagsBits.ModerateMembers)) {
         return interaction.reply({ content: '❌ ليس لديك صلاحية!', flags: MessageFlags.Ephemeral });
     }
@@ -204,22 +233,31 @@ async function handleModButton(interaction) {
 
     if (!actionData) {
         return interaction.update({
-            embeds: [new EmbedBuilder().setColor('#95A5A6').setDescription('> ⏰ انتهى وقت هذا الإجراء.')],
-            components: []
+            embeds: [
+                new EmbedBuilder()
+                    .setColor('#95A5A6')
+                    .setDescription('> ⏰ انتهى وقت هذا الإجراء — يمكنك إعادة الأمر.'),
+            ],
+            components: [],
         });
     }
 
-    // إلغاء
+    // ── إلغاء ──────────────────────────────────────────────────────────────
     if (id.startsWith('mod_cancel_')) {
         pendingActions.delete(msgId);
-        await interaction.update({
-            embeds: [new EmbedBuilder().setColor('#95A5A6').setTitle('❌ تم إلغاء الإجراء').setDescription(`> تم إلغاء ${id.split('_')[2]} من قِبل ${interaction.user}`)],
-            components: []
+        return interaction.update({
+            embeds: [
+                new EmbedBuilder()
+                    .setColor('#95A5A6')
+                    .setTitle('❌ تم إلغاء الإجراء')
+                    .setDescription(`> تم الإلغاء من قِبل ${interaction.user}`)
+                    .setTimestamp(),
+            ],
+            components: [],
         });
-        return;
     }
 
-    // تأكيد
+    // ── تنفيذ ──────────────────────────────────────────────────────────────
     pendingActions.delete(msgId);
     const { type, member, target, reason, author, guild, duration } = actionData;
 
@@ -228,48 +266,59 @@ async function handleModButton(interaction) {
 
         if (type === 'ban') {
             await member.ban({ reason: `بواسطة ${author.username}: ${reason}` });
-            resultExtra = '🔨 تم الحظر النهائي';
+            resultExtra = '🔨 تم الحظر النهائي بنجاح';
 
         } else if (type === 'kick') {
             await member.kick(`بواسطة ${author.username}: ${reason}`);
-            resultExtra = '👢 تم الطرد';
+            resultExtra = '👢 تم الطرد بنجاح';
 
         } else if (type === 'warn') {
             const userData = db.getUserData(target.id);
             const warnings = (userData.warnings || 0) + 1;
             db.updateFields(target.id, { warnings });
-            resultExtra = `⚠️ التحذير رقم ${warnings}`;
-
-            // إرسال DM للمحذَّر
-            target.send?.(`⚠️ **تحذير** في **${guild.name}**\nالسبب: ${reason}\nعدد تحذيراتك: ${warnings}`).catch(() => {});
+            resultExtra = `⚠️ هذا التحذير رقم ${warnings} للعضو`;
+            // إرسال DM
+            target.send?.(
+                `⚠️ **تحذير** في سيرفر **${guild.name}**\nالسبب: ${reason}\nإجمالي تحذيراتك: **${warnings}**`
+            ).catch(() => {});
 
         } else if (type === 'mute') {
-            await member.timeout(duration || 10 * 60 * 1000, `بواسطة ${author.username}: ${reason}`);
-            resultExtra = '🔇 تم الكتم 10 دقائق';
+            const muteDuration = duration || 10 * 60 * 1000;
+            await member.timeout(muteDuration, `بواسطة ${author.username}: ${reason}`);
+            const mins = Math.round(muteDuration / 60_000);
+            resultExtra = `🔇 تم الكتم لمدة ${mins} دقيقة`;
         }
 
         const resultEmbed = buildResultEmbed(type, target, reason, author, resultExtra);
 
-        // زر رفع العقوبة (للكتم فقط)
+        // زر رفع الكتم للكتم فقط
         const components = [];
         if (type === 'mute') {
-            components.push(new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setCustomId(`mod_confirm_unmute_${target.id}`)
-                    .setLabel('🔊 رفع الكتم')
-                    .setStyle(ButtonStyle.Success)
-            ));
+            components.push(
+                new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`mod_confirm_unmute_${target.id}_${author.id}`)
+                        .setLabel('🔊 رفع الكتم')
+                        .setStyle(ButtonStyle.Success)
+                )
+            );
         }
 
-        await interaction.update({ embeds: [resultEmbed], components });
+        return interaction.update({ embeds: [resultEmbed], components });
 
-    } catch (error) {
-        await interaction.update({
-            embeds: [new EmbedBuilder().setColor('#ED4245').setTitle('❌ فشل التنفيذ').setDescription(`> ${error.message}`)],
-            components: []
+    } catch (err) {
+        return interaction.update({
+            embeds: [
+                new EmbedBuilder()
+                    .setColor('#ED4245')
+                    .setTitle('❌ فشل التنفيذ')
+                    .setDescription(`> ${err.message}`)
+                    .setTimestamp(),
+            ],
+            components: [],
         });
     }
 }
 
-// تصدير المعالج ليُستخدم في interactionCreate
+// تصدير المعالج
 module.exports.handleModButton = handleModButton;
