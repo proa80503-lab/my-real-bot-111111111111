@@ -1,22 +1,21 @@
 'use strict';
 
 const { Client, GatewayIntentBits, Partials } = require('discord.js');
-const config = require('./config');
+const config       = require('./config');
 const eventHandler = require('./handlers/eventHandler');
 const commandHandler = require('./handlers/commandHandler');
 
-// ─── معالجة الأخطاء الكارثية لمنع Crash ─────────────────────────────────
+// ─── معالجة الأخطاء الكارثية لمنع Crash ────────────────────────────────────
 process.on('uncaughtException', (err) => {
-    console.error('[CRASH] استثناء غير معالج:', err);
-    // لا نغلق البوت — نسجّل الخطأ فقط ونستمر
+    // لا نُغلق البوت — نسجّل الخطأ ونستمر
+    console.error('[CRASH] استثناء غير معالج:', err?.stack || err?.message || err);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('[UNHANDLED] رفض Promise غير معالج:', reason);
-    // لا نغلق البوت — نسجّل الخطأ فقط ونستمر
+process.on('unhandledRejection', (reason) => {
+    console.error('[UNHANDLED] رفض Promise غير معالج:', reason?.stack || reason);
 });
 
-// ─── تخصيص البوت ──────────────────────────────────────────────────
+// ─── إنشاء Client ───────────────────────────────────────────────────────────
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -30,30 +29,43 @@ const client = new Client({
         GatewayIntentBits.GuildVoiceStates,
     ],
     partials: [Partials.Channel, Partials.Message],
+    // حماية ضد API abuse
+    rest: { timeout: 15_000 },
 });
 
-// ─── خادم ويب بسيط لدعم الاستضافة (Render/Koyeb) ──────────────────────────
+// ─── خادم ويب لدعم Render / Koyeb / Railway ─────────────────────────────────
 const http = require('http');
 const port = process.env.PORT || 3000;
-http.createServer((req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-    res.write('البوت يعمل بنجاح 24/7! 🚀');
-    res.end();
-}).listen(port, () => {
-    console.log(`[Web Server] 🌐 الخادم يعمل على المنفذ: ${port}`);
+
+const webServer = http.createServer((req, res) => {
+    const uptime = process.uptime();
+    const h = Math.floor(uptime / 3600);
+    const m = Math.floor((uptime % 3600) / 60);
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({
+        status: 'online',
+        uptime: `${h}h ${m}m`,
+        guilds: client.guilds?.cache?.size ?? 0,
+        tag:    client.user?.tag ?? 'connecting...',
+    }));
 });
 
-// ─── تحميل الـ Handlers ───────────────────────────────────────────────────
+webServer.listen(port, () => {
+    console.log(`[WebServer] 🌐 يعمل على المنفذ ${port}`);
+});
+
+// ─── تحميل الـ Handlers ──────────────────────────────────────────────────────
 try {
     eventHandler(client);
     commandHandler(client);
-    console.log('[Handlers] ✅ تم تحميل الأوامر والأحداث بنجاح.');
+    console.log('[Handlers] ✅ الأحداث والأوامر محمّلة بنجاح');
 } catch (err) {
-    console.error('[Handlers] ❌ فشل تحميل الـ Handlers:', err);
+    console.error('[Handlers] ❌ فشل التحميل:', err.message);
+    process.exit(1);
 }
 
-// ─── تسجيل الدخول ─────────────────────────────────────────────────────────
+// ─── تسجيل الدخول ───────────────────────────────────────────────────────────
 client.login(config.token).catch((err) => {
-    console.error('[Login] فشل تسجيل الدخول — تحقق من DISCORD_TOKEN في .env:', err.message);
+    console.error('[Login] ❌ فشل تسجيل الدخول — تحقق من DISCORD_TOKEN في .env:', err.message);
     process.exit(1);
 });
