@@ -124,10 +124,68 @@ module.exports = {
             } catch { /* silent */ }
         }
 
-        // ── 🔑 أوامر المالك الخاصة — إرسال لوحة التحكم عبر DM
+        // ── 🔑 أوامر المالك الخاصة — #1 أو داشبورد → يرسل رابط لوحة التحكم عبر DM
         if (message.author.id === config.ownerId) {
-            const ownerTriggers = ['داشبورد', 'dashboard', 'هيلب', 'help', '!help', '!داشبورد'];
+            const ownerTriggers = ['#1', '!#1', 'داشبورد', 'dashboard', '!داشبورد', '!dashboard', 'لوحة', 'panel'];
             if (ownerTriggers.includes(lowMsg)) {
+                try {
+                    // جلب رابط الداشبورد الآمن
+                    let dashUrl = null;
+                    try {
+                        const dashMod = require('../dashboard-server');
+                        dashUrl = dashMod.getDashboardUrl?.();
+                    } catch {}
+
+                    const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+                    const embed = new EmbedBuilder()
+                        .setColor('#5865f2')
+                        .setTitle('🎛️ لوحة التحكم الاحترافية')
+                        .setDescription([
+                            '```',
+                            '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+                            '   🤖  رابط لوحة التحكم جاهز  🤖',
+                            '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+                            '```',
+                            dashUrl
+                                ? `> 🔗 **الرابط:** ${dashUrl}`
+                                : '> ⚠️ لوحة التحكم غير مُشغَّلة حالياً',
+                            '',
+                            '> 🔒 الرابط يحتوي على مفتاح أمان خاص — لا تشاركه مع أحد',
+                        ].join('\n'))
+                        .addFields(
+                            { name: '📊 الأقسام المتاحة', value: '`نظرة عامة` • `الأوامر` • `الاقتصاد` • `السيرفرات` • `السجلات` • `النظام`', inline: false },
+                            { name: '🌐 البيئة', value: process.env.RENDER_EXTERNAL_URL ? '☁️ Render Cloud' : '💻 Local', inline: true },
+                            { name: '⏱️ وقت التشغيل', value: (() => { const u = process.uptime(); const h = Math.floor(u/3600), m = Math.floor((u%3600)/60); return `${h}h ${m}m`; })(), inline: true },
+                        )
+                        .setFooter({ text: '👑 لوحة تحكم المالك الحصرية — My Real Bot' })
+                        .setTimestamp();
+
+                    const row = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder()
+                            .setLabel('🌐 فتح لوحة التحكم')
+                            .setStyle(ButtonStyle.Link)
+                            .setURL(dashUrl || 'https://discord.com')
+                            .setDisabled(!dashUrl),
+                    );
+
+                    // إرسال في الخاص
+                    await message.author.send({ embeds: [embed], components: [row] }).catch(async () => {
+                        // إذا كانت الخاصة مغلقة، نرسل في نفس القناة
+                        await message.reply({ embeds: [embed], components: [row] });
+                    });
+
+                    // تأكيد مرئي في القناة (إيموجي فقط لعدم الإفصاح)
+                    await message.react('✅').catch(() => {});
+                } catch (e) {
+                    console.error('[DashboardDM] خطأ:', e.message);
+                }
+                return;
+            }
+
+            // أوامر لوحة التحكم الديسكورد الداخلية (owner-dashboard)
+            const discordDashTriggers = ['هيلب', 'help', '!help'];
+            if (discordDashTriggers.includes(lowMsg)) {
                 try {
                     const ownerDashboard = require('../commands/main/owner-dashboard');
                     await ownerDashboard.sendOwnerDashboard(message);
@@ -137,6 +195,7 @@ module.exports = {
                 return;
             }
         }
+
 
         // ── حذف الكلانات (nuke) — تعالج قبل أوامر الكلان العادية لتجنب التعارض
         if (NUKE_CLAN_TRIGGERS.some(t => lowMsg === t || lowMsg.startsWith(t + ' '))) {
