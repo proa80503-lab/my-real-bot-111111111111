@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "dashboard": "node dashboard-server.js",
+    "dev:all": "concurrently \"nodemon index.js\" \"node dashboard-server.js\""
   },
   "dependencies": {
     "@discord-player/extractor": "^7.1.0",
