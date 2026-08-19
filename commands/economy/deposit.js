@@ -24,10 +24,13 @@ module.exports = {
             } else if (input === 'third' || input === 'ثلث') {
                 amount = Math.floor(bal / 3);
             } else {
-                amount = parseInt(args[0]);
+                amount = Number(args[0]);
             }
 
-            if (isNaN(amount) || amount <= 0) return message.reply('❌ الاستخدام: `ايداع <مبلغ | كامل | نصف | ربع | ثلث>`');
+            // حماية صارمة من الثغرات
+            if (isNaN(amount) || !Number.isFinite(amount) || amount <= 0 || amount % 1 !== 0) {
+                return message.reply('❌ يرجى إدخال مبلغ صحيح وصالح! (لا يمكن استخدام الكسور أو الأرقام السالبة).');
+            }
             if (bal < amount) return message.reply(`❌ رصيدك لا يكفي! محفظتك: **${bal.toLocaleString()}** ${config.currency}`);
 
             const newBalance = (userData.balance || 0) - amount;
