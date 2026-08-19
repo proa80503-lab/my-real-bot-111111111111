@@ -322,3 +322,6 @@ async function handleModButton(interaction) {
 
 // تصدير المعالج
 module.exports.handleModButton = handleModButton;
+
+module.exports.name = 'mod-buttons';
+module.exports.execute = async () => {};
