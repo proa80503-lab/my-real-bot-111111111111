@@ -31,10 +31,12 @@ module.exports = {
             else if (['نصف', 'half'].includes(input)) amount = Math.floor(bankBal / 2);
             else if (['ربع', 'quarter'].includes(input)) amount = Math.floor(bankBal / 4);
             else if (['ثلث', 'third'].includes(input)) amount = Math.floor(bankBal / 3);
-            else amount = parseInt(input.replace(/,/g, ''));
+            else amount = Number(input.replace(/,/g, ''));
 
-            if (!amount || isNaN(amount) || amount <= 0)
-                return context.reply('❌ الاستخدام: `سحب <مبلغ | كامل | نصف | ربع>`');
+            // حماية صارمة من الثغرات
+            if (isNaN(amount) || !Number.isFinite(amount) || amount <= 0 || amount % 1 !== 0) {
+                return context.reply('❌ يرجى إدخال مبلغ صحيح وصالح! (لا يمكن استخدام الكسور أو الأرقام السالبة).');
+            }
             if (amount > bankBal)
                 return context.reply(`❌ بنكك فيه **${bankBal.toLocaleString()}** ${config.currency} فقط!`);
 
