@@ -652,8 +652,9 @@ function parseAmount(input, max) {
     if (input === 'نصف' || input === 'half') return Math.floor(max / 2);
     if (input === 'ربع' || input === 'quarter') return Math.floor(max / 4);
     if (input === 'ثلث' || input === 'third') return Math.floor(max / 3);
-    const n = parseInt(input.replace(/,/g, ''));
-    return isNaN(n) ? null : n;
+    const n = Number(input.replace(/,/g, ''));
+    if (isNaN(n) || !Number.isFinite(n) || n <= 0 || n % 1 !== 0) return null;
+    return n;
 }
 
 function bankEmbed(title, desc, bal, bank) {
