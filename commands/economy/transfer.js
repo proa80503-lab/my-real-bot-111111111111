@@ -10,10 +10,15 @@ module.exports = {
 
     async execute(message, args) {
         const target = message.mentions.users.first();
-        let amount = parseInt(args.find(arg => !arg.includes('<@')));
+        let amount = Number(args.find(arg => !arg.includes('<@')));
 
-        if (!target || isNaN(amount) || amount <= 0) {
+        if (!target) {
             return message.reply(`❌ الاستخدام الصحيح: \`${config.prefix}transfer @user <amount>\``);
+        }
+
+        // حماية صارمة من الثغرات
+        if (isNaN(amount) || !Number.isFinite(amount) || amount <= 0 || amount % 1 !== 0) {
+            return message.reply('❌ يرجى إدخال مبلغ صحيح وصالح! (لا يمكن استخدام الكسور أو الأرقام السالبة).');
         }
 
         if (target.id === message.author.id) {
