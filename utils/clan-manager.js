@@ -12,6 +12,10 @@ class ClanManager {
     loadClans() {
         try {
             if (!fs.existsSync(CLANS_FILE)) {
+                const dir = path.dirname(CLANS_FILE);
+                if (!fs.existsSync(dir)) {
+                    fs.mkdirSync(dir, { recursive: true });
+                }
                 const defaultData = {};
                 fs.writeFileSync(CLANS_FILE, JSON.stringify(defaultData, null, 2));
                 return defaultData;
