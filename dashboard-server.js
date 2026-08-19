@@ -12,6 +12,8 @@ const http   = require('http');
 const crypto = require('crypto');
 const fs     = require('fs');
 const path   = require('path');
+const db     = require('./utils/database');
+const dConf  = require('./utils/dashboard-config');
 
 // ─── الإعدادات ───────────────────────────────────────────────────────────────
 const PORT           = process.env.PORT || 3000;
@@ -346,6 +348,7 @@ code,.uid{font-family:var(--mono);background:rgba(88,101,242,.12);border-radius:
       <button class="ntab" onclick="showTab('guilds',this)">🌐 السيرفرات</button>
       <button class="ntab" onclick="showTab('logs',this)">📋 السجلات</button>
       <button class="ntab" onclick="showTab('system',this)">⚙️ النظام</button>
+      <button class="ntab" onclick="showTab('control',this)">🛠️ التحكم الكامل</button>
     </div>
   </div>
 </div>
@@ -480,6 +483,68 @@ code,.uid{font-family:var(--mono);background:rgba(88,101,242,.12);border-radius:
   </div>
 </div>
 
+<!-- ═══ CONTROL PANEL ═══ -->
+<div id="tab-control" class="sec">
+  <div class="wrap">
+    <h2 class="stitle">🛠️ التحكم الشامل في البوت</h2>
+    
+    <div class="info-g">
+      <!-- الردود التلقائية -->
+      <div class="ic">
+        <h3>💬 إضافة رد تلقائي</h3>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px;">
+          <input type="text" id="ar-trigger" class="url-input" placeholder="الكلمة (مثال: السلام عليكم)">
+          <input type="text" id="ar-response" class="url-input" placeholder="الرد (مثال: وعليكم السلام)">
+          <label style="font-size:12px;color:var(--muted)"><input type="checkbox" id="ar-exact"> مطابقة الكلمة بالضبط فقط</label>
+          <button class="btn success" onclick="submitForm('/api/control/response', { trigger: document.getElementById('ar-trigger').value, response: document.getElementById('ar-response').value, exactMatch: document.getElementById('ar-exact').checked }, 'تمت إضافة الرد!')">➕ إضافة الرد</button>
+        </div>
+      </div>
+
+      <!-- إرسال هدية -->
+      <div class="ic">
+        <h3>🎁 إرسال هدية لعضو</h3>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px;">
+          <input type="text" id="gift-userId" class="url-input" placeholder="ID المستخدم">
+          <input type="number" id="gift-amount" class="url-input" placeholder="المبلغ (مثال: 10000)">
+          <button class="btn" style="background:var(--purple)" onclick="submitForm('/api/control/gift', { userId: document.getElementById('gift-userId').value, amount: Number(document.getElementById('gift-amount').value) }, 'تم إرسال الهدية!')">💸 إرسال الهدية</button>
+        </div>
+      </div>
+
+      <!-- إرسال إعلان -->
+      <div class="ic">
+        <h3>📢 إرسال إعلان للديسكورد</h3>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px;">
+          <input type="text" id="ann-channel" class="url-input" placeholder="ID الروم">
+          <textarea id="ann-msg" class="url-input" rows="3" placeholder="اكتب رسالتك هنا..."></textarea>
+          <button class="btn" style="background:var(--orange)" onclick="submitForm('/api/control/announce', { channelId: document.getElementById('ann-channel').value, message: document.getElementById('ann-msg').value }, 'تم إرسال الإعلان!')">🚀 إرسال الرسالة</button>
+        </div>
+      </div>
+    </div>
+    
+    <script>
+    async function submitForm(url, data, successMsg) {
+      if(!data) return;
+      try {
+        const res = await fetch(url + '?key=${DASHBOARD_KEY}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        if(result.success) {
+          alert(successMsg);
+          document.querySelectorAll('.url-input').forEach(i => { if(i.id.startsWith(url.split('/').pop())) i.value = ''; });
+        } else {
+          alert('❌ خطأ: ' + (result.error || 'حدث خطأ'));
+        }
+      } catch(e) {
+        alert('❌ خطأ في الاتصال بالخادم');
+      }
+    }
+    </script>
+  </div>
+</div>
+
 <div class="ftr"><div class="wrap">🤖 My Real Bot Dashboard • يتجدد تلقائياً • <span id="clk"></span></div></div>
 
 <script>
@@ -518,10 +583,53 @@ let _client = null;
 module.exports.setClient = (c) => { _client = c; };
 
 // ─── HTTP Server ──────────────────────────────────────────────────────────────
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
     const [urlPath, query] = req.url.split('?');
     const params = new URLSearchParams(query || '');
     const reqKey = params.get('key');
+
+    // Helper for JSON response
+    const sendJson = (status, data) => {
+        res.writeHead(status, {'Content-Type':'application/json;charset=utf-8'});
+        res.end(JSON.stringify(data));
+    };
+
+    // Helper for reading JSON body
+    const readBody = () => new Promise(resolve => {
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', () => { try { resolve(JSON.parse(body)); } catch { resolve({}); } });
+    });
+
+    if (req.method === 'POST' && urlPath.startsWith('/api/control/')) {
+        if (reqKey !== DASHBOARD_KEY) return sendJson(401, { success: false, error: 'Unauthorized' });
+        const body = await readBody();
+
+        if (urlPath === '/api/control/response') {
+            if (!body.trigger || !body.response) return sendJson(400, { success: false, error: 'بيانات ناقصة' });
+            dConf.addAutoResponse(body.trigger, body.response, !!body.exactMatch);
+            return sendJson(200, { success: true });
+        }
+        
+        if (urlPath === '/api/control/gift') {
+            if (!body.userId || !body.amount) return sendJson(400, { success: false, error: 'بيانات ناقصة' });
+            db.addMoney(body.userId, body.amount);
+            return sendJson(200, { success: true });
+        }
+
+        if (urlPath === '/api/control/announce') {
+            if (!_client) return sendJson(500, { success: false, error: 'البوت غير متصل' });
+            if (!body.channelId || !body.message) return sendJson(400, { success: false, error: 'بيانات ناقصة' });
+            const channel = _client.channels.cache.get(body.channelId);
+            if (!channel) return sendJson(404, { success: false, error: 'الروم غير موجود' });
+            try {
+                await channel.send(body.message);
+                return sendJson(200, { success: true });
+            } catch (e) {
+                return sendJson(500, { success: false, error: e.message });
+            }
+        }
+    }
 
     // ─ Health check (لا يحتاج مفتاح — مهم لـ Render)
     if (urlPath === '/health' || urlPath === '/') {
