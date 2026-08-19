@@ -326,7 +326,7 @@ async function playWordChain(message) {
 // ─── الأمر الرئيسي ────────────────────────────────────────────────────────────
 module.exports = {
     name: 'minigames',
-    aliases: ['ألعاب-مصغرة', 'mini', 'bomb', 'قنبلة', 'سرعة', 'speed', 'كلمات', 'chain', 'تسلسل'],
+    aliases: ['ألعاب-مصغرة', 'mini', 'bomb', 'قنبلة', 'سرعة', 'speed', 'chain', 'تسلسل'],
     description: 'ألعاب مصغرة متطورة',
     usage: 'mini [bomb|speed|chain]',
 
@@ -337,7 +337,7 @@ module.exports = {
             return await playNumberBomb(message);
         } else if (sub === 'speed' || sub === 'سرعة') {
             return await playSpeedChallenge(message);
-        } else if (sub === 'chain' || sub === 'كلمات' || sub === 'تسلسل') {
+        } else if (sub === 'chain' || sub === || sub === 'تسلسل') {
             return await playWordChain(message);
         } else {
             // عرض القائمة
