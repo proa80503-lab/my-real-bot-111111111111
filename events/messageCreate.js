@@ -427,11 +427,29 @@ module.exports = {
             }
         }
 
-        // ── ردود مخصصة
+        // ── ردود مخصصة من الكود
         try {
             const customResponses = require('../commands/main/custom-responses');
             if (customResponses?.checkResponse && await customResponses.checkResponse(message)) return;
         } catch { }
+
+        // ── ردود الداشبورد المخصصة ──
+        try {
+            const dConf = require('../utils/dashboard-config');
+            const autoResps = dConf.getAutoResponses();
+            for (const ar of autoResps) {
+                const triggerStr = ar.trigger.toLowerCase();
+                if (ar.exactMatch && lowMsg === triggerStr) {
+                    await message.reply(ar.response);
+                    return;
+                } else if (!ar.exactMatch && lowMsg.includes(triggerStr)) {
+                    await message.reply(ar.response);
+                    return;
+                }
+            }
+        } catch (e) {
+            console.error('[DashboardAutoRes] error:', e.message);
+        }
 
         // ── كشف المنشن المباشر فقط (لا الـ Reply)
         // تم إلغاء: الرد على الـ Reply لأنه مزعج
