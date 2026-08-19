@@ -133,8 +133,7 @@ class CrashGame {
 
 // ─── الأمر الرئيسي ────────────────────────────────────────────────────────────
 module.exports = {
-    name: 'casino',
-    aliases: ['كازينو', 'casino', 'قمار', 'سلوتس', 'slots', 'crash', 'كراش', 'رولت', 'roulette'],
+    name: aliases: ['كازينو', 'قمار', 'سلوتس', 'slots', 'crash', 'كراش', 'رولت', 'roulette'],
     description: 'كازينو متطور مع ألعاب متعددة',
     usage: 'كازينو [slots|crash|roulette] [مبلغ]',
 
