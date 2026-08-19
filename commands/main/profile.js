@@ -86,7 +86,7 @@ function drawBar(value, max, length = 10) {
 
 module.exports = {
     name: 'profile',
-    aliases: ['بروفايل', 'prof', 'ملف', 'بطاقة', 'هوية', 'p'],
+    aliases: ['بروفايل', 'prof', 'ملف', 'بطاقة', 'هوية', ],
     description: 'عرض بطاقة الهوية المتطورة',
     usage: 'بروفايل [@مستخدم]',
 
