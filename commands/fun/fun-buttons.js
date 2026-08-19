@@ -354,8 +354,7 @@ const BALL_ANSWERS = [
 ];
 
 module.exports.ball = {
-    name: '8ball',
-    aliases: ['تنبؤ', 'كرة_الحظ', '8ball'],
+    name: aliases: ['تنبؤ', 'كرة_الحظ', ],
     description: 'اسأل الكرة السحرية',
     usage: '8ball [سؤال]',
 
@@ -412,3 +411,6 @@ module.exports.ball = {
         await interaction.update({ embeds: [embed] });
     }
 };
+
+module.exports.name = 'fun-buttons';
+module.exports.execute = async () => {};
