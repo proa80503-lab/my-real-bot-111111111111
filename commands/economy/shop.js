@@ -453,7 +453,7 @@ function buildMainShop(userId) {
 // ═══════════════════════════════════════════════════════════
 module.exports = {
     name: 'shop',
-    aliases: ['متجر', 'سوق', 'شوب', 'store', 'market'],
+    aliases: ['متجر', 'شوب', 'store', ],
     description: 'متجر السيرفر الكامل',
     usage: 'متجر',
 
