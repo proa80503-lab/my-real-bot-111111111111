@@ -77,39 +77,32 @@ module.exports = {
     moodMessageInterval: 180,    // كل 3 ساعات (بدلاً من 55 دقيقة)
     greetingInterval: 240,       // كل 4 ساعات (بدلاً من 60 دقيقة)
 
-    // ─── أيتمز المتجر ─────────────────────────────────────────────
+    // ─── أيتمز المتجر (الأصول الواقعية) ──────────────────────────
     shopItems: {
-        // أدوات عمل
-        pickaxe: { name: 'معول', price: 1000, description: 'زيادة أرباح العمل 20%', emoji: '⛏️', duration: 7 },
-        fishing_rod: { name: 'صنارة صيد', price: 1500, description: 'صيد أسماك ثمينة', emoji: '🎣', duration: 7 },
-        laptop: { name: 'لابتوب', price: 5000, description: 'زيادة أرباح العمل 50%', emoji: '💻', duration: 14 },
+        // أجهزة وإلكترونيات
+        smartphone: { name: 'هاتف ذكي', price: 5000, description: 'هاتف ذكي بآخر إصدار', emoji: '📱', duration: 999, image: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?q=80&w=800' },
+        laptop: { name: 'لابتوب ألعاب', price: 15000, description: 'لابتوب بمواصفات خارقة', emoji: '💻', duration: 999, image: 'https://images.unsplash.com/photo-1603302576837-37561b2e2302?q=80&w=800' },
+        
+        // مركبات
+        sport_car: { name: 'سيارة رياضية', price: 250000, description: 'سيارة سريعة جداً', emoji: '🏎️', duration: 999, image: 'https://images.unsplash.com/photo-1605559424843-9e4c228bf1c2?q=80&w=800' },
+        yacht: { name: 'يخت فاخر', price: 1500000, description: 'يخت فخم للرحلات البحرية', emoji: '🛥️', duration: 999, image: 'https://images.unsplash.com/photo-1567899378494-47b22a2ae96a?q=80&w=800' },
+        private_jet: { name: 'طائرة خاصة', price: 15000000, description: 'طائرة خاصة للتنقل الفاخر', emoji: '✈️', duration: 999, image: 'https://images.unsplash.com/photo-1540962351504-03099e0a754b?q=80&w=800' },
 
-        // حماية
-        shield: { name: 'درع', price: 2000, description: 'حماية من السرقة', emoji: '🛡️', duration: 7 },
-        armor: { name: 'درع قوي', price: 5000, description: 'حماية كاملة', emoji: '🛡️', duration: 30 },
+        // عقارات
+        villa: { name: 'فيلا فاخرة', price: 2000000, description: 'فيلا مع مسبح خاص', emoji: '🏡', duration: 999, image: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?q=80&w=800' },
+        mansion: { name: 'قصر فخم', price: 5000000, description: 'قصر ضخم لك ولعائلتك', emoji: '🏰', duration: 999, image: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?q=80&w=800' },
+        private_island: { name: 'جزيرة خاصة', price: 50000000, description: 'جزيرتك الخاصة وسط المحيط', emoji: '🏝️', duration: 999, image: 'https://images.unsplash.com/photo-1559128010-7c1ad6e1b6a5?q=80&w=800' },
 
-        // بوستات
-        xp_boost_small: { name: 'بوست XP صغير', price: 3000, description: 'XP x2 (يوم)', emoji: '⚡', duration: 1 },
-        xp_boost_large: { name: 'بوست XP كبير', price: 10000, description: 'XP x5 (أسبوع)', emoji: '⚡', duration: 7 },
-        coin_boost: { name: 'بوست عملة', price: 5000, description: 'أرباح x2 (يومين)', emoji: '💰', duration: 2 },
-
-        // تيمات وألوان
-        vip_badge: { name: 'شارة VIP', price: 10000, description: 'شارة VIP خاصة', emoji: '👑', duration: 30 },
-        profileColor: { name: 'لون البروفايل', price: 3000, description: 'اختر لون بروفايلك', emoji: '🎨', duration: 30 },
-        custom_title: { name: 'لقب مخصص', price: 15000, description: 'اختر لقبك', emoji: '📛', duration: 30 },
-
-        // حيوانات
-        cat: { name: 'قطة', price: 5000, description: 'دخل يومي +50', emoji: '🐱', duration: 999 },
-        dog: { name: 'كلب', price: 6000, description: 'دخل يومي +60', emoji: '🐕', duration: 999 },
-
-        // سيارات ومنازل
-        car: { name: 'سيارة', price: 20000, description: 'سيارة فخمة', emoji: '🚗', duration: 999 },
-        house: { name: 'منزل', price: 50000, description: 'منزل جميل', emoji: '🏠', duration: 999 },
-
-        // أيتمز خاصة
-        lottery_ticket: { name: 'تذكرة يانصيب', price: 500, description: 'فرصة للفوز!', emoji: '🎫', duration: 1 },
-        gift_box: { name: 'صندوق', price: 1000, description: '100-5000 عشوائي', emoji: '🎁', duration: 1 },
-        lucky_charm: { name: 'تميمة حظ', price: 12000, description: 'حظ +25%', emoji: '🍀', duration: 7 }
+        // أدوات وحماية
+        shield: { name: 'درع معدني', price: 5000, description: 'حماية من السرقة لـ 24 ساعة', emoji: '🛡️', duration: 1, image: 'https://images.unsplash.com/photo-1588600878108-578307a3cc9d?q=80&w=800' },
+        moneybag: { name: 'كيس المال', price: 1000, description: 'يحتوي على مبلغ عشوائي', emoji: '💰', duration: 1, image: 'https://images.unsplash.com/photo-1579621970588-a35d0e7ab9b6?q=80&w=800' },
+        vip_badge: { name: 'شارة VIP', price: 50000, description: 'شارة VIP الخاصة بالمليارديرات', emoji: '👑', duration: 30, image: 'https://images.unsplash.com/photo-1604147706283-d7119b5b822c?q=80&w=800' },
+        rob_immunity: { name: 'حصانة دائمة', price: 100000, description: 'لا أحد يستطيع سرقتك أبداً', emoji: '⚔️', duration: 999, image: 'https://images.unsplash.com/photo-1614030424734-7a329d93e8e2?q=80&w=800' },
+        
+        // ترقيات
+        bankextend: { name: 'توسعة البنك', price: 20000, description: 'زيادة سعة البنك بمقدار 50,000', emoji: '🏦', duration: 999, image: 'https://images.unsplash.com/photo-1501167786227-4cba60f6d58f?q=80&w=800' },
+        vault: { name: 'خزنة شخصية', price: 50000, description: 'خزنة لا يمكن سرقتها', emoji: '🔐', duration: 999, image: 'https://images.unsplash.com/photo-1582139329536-e7284fece509?q=80&w=800' },
+        xp_boost_large: { name: 'مضاعف الخبرة (أسبوع)', price: 15000, description: 'مضاعف للخبرة لمدة 7 أيام', emoji: '⚡', duration: 7, image: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=800' }
     },
 
     // ─── ألوان البروفايل المتاحة ─────────────────────────────────
