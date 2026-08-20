@@ -36,6 +36,58 @@ module.exports = {
     name: Events.InteractionCreate,
     async execute(interaction) {
         try {
+            // ===== AUTO-DEFER MONKEY PATCH =====
+            // This safely defers all slow buttons to prevent "Application didn't respond in time"
+            // except for buttons that open modals (you cannot open a modal on a deferred interaction).
+            if (interaction.isButton()) {
+                const id = interaction.customId;
+                const modalPrefixes = [
+                    'clan_create', 'clan_rename', 'clan_edit_rank', 'clan_invite', 'clan_kick', 'clan_desc',
+                    'eco_deposit', 'eco_withdraw', 'eco_transfer', 'eco_rob',
+                    'adm_warn', 'adm_jail', 'adm_kick', 'adm_ban', 'adm_unmute', 'adm_unjail', 'adm_unban',
+                    'status_btn_', 'company_name', 'company_desc', 'company_logo', 'company_color', 'room_create'
+                ];
+                const isModalBtn = modalPrefixes.some(p => id.startsWith(p));
+                const needsDeferReply = id.startsWith('color_') || id.startsWith('colorole_');
+
+                if (!isModalBtn && !needsDeferReply) {
+                    await interaction.deferUpdate().catch(() => {});
+                } else if (!isModalBtn && needsDeferReply) {
+                    await interaction.deferReply({ ephemeral: true }).catch(() => {});
+                }
+
+                // Monkey-patch update to editReply if deferred
+                const origUpdate = interaction.update.bind(interaction);
+                interaction.update = async (options) => {
+                    if (interaction.deferred || interaction.replied) return interaction.editReply(options).catch(()=>{});
+                    return origUpdate(options);
+                };
+
+                // Monkey-patch reply to followUp if deferred
+                const origReply = interaction.reply.bind(interaction);
+                interaction.reply = async (options) => {
+                    if (interaction.deferred || interaction.replied) {
+                        const isEph = options.ephemeral || (options.flags && (options.flags === 64 || options.flags.bitfield === 64));
+                        return interaction.followUp({ ...options, ephemeral: !!isEph }).catch(()=>{});
+                    }
+                    return origReply(options);
+                };
+                
+                // Protect double defer calls
+                const origDeferUpdate = interaction.deferUpdate.bind(interaction);
+                interaction.deferUpdate = async (options) => {
+                    if (interaction.deferred || interaction.replied) return;
+                    return origDeferUpdate(options);
+                };
+                
+                const origDeferReply = interaction.deferReply.bind(interaction);
+                interaction.deferReply = async (options) => {
+                    if (interaction.deferred || interaction.replied) return;
+                    return origDeferReply(options);
+                };
+            }
+            // ===================================
+
             // ===== 1. معالجة الـ Modals =====
             if (interaction.isModalSubmit()) {
                 // 🏠 Quick Room Modals
