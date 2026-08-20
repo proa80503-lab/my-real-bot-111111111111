@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مزاد البوت العلني</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #140d1a;
+            --primary: #9b59b6;
+            --secondary: #25162e;
+            --text: #ffffff;
+            --text-muted: #cbb4d4;
+            --accent: #f1c40f;
+            --danger: #e74c3c;
+            --card-bg: rgba(37, 22, 46, 0.7);
+            --glass: rgba(255, 255, 255, 0.05);
+            --border: rgba(155, 89, 182, 0.3);
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Cairo', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+        body::before { content: ''; position: fixed; inset: 0; background: radial-gradient(circle at top right, rgba(155,89,182,0.15), transparent 40%), radial-gradient(circle at bottom left, rgba(241,196,15,0.1), transparent 40%); z-index: -1; }
+        
+        /* Navbar */
+        .navbar { display: flex; justify-content: space-between; align-items: center; padding: 1rem 2rem; background: rgba(20, 13, 26, 0.8); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+        .nav-brand { font-weight: 800; font-size: 1.5rem; color: var(--primary); display: flex; align-items: center; gap: 0.5rem; }
+        
+        .user-profile { display: flex; align-items: center; gap: 1rem; background: var(--glass); padding: 0.5rem 1rem; border-radius: 50px; border: 1px solid var(--border); }
+        .user-profile img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary); }
+        .user-info { display: flex; flex-direction: column; }
+        .username { font-weight: 600; font-size: 0.9rem; }
+        .balances { display: flex; gap: 0.5rem; font-size: 0.8rem; font-family: 'JetBrains Mono', monospace; color: var(--accent); }
+        
+        /* Container & Tabs */
+        .container { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+        .tabs { display: flex; gap: 1rem; margin-bottom: 2rem; justify-content: center; }
+        .tab-btn { background: var(--secondary); color: var(--text); border: 1px solid var(--border); padding: 0.8rem 2rem; border-radius: 12px; cursor: pointer; font-family: 'Cairo'; font-weight: 600; transition: all 0.3s; font-size: 1.1rem; }
+        .tab-btn.active { background: var(--primary); border-color: var(--primary); box-shadow: 0 4px 15px rgba(155,89,182,0.4); }
+        .tab-btn:hover:not(.active) { background: var(--glass); transform: translateY(-2px); }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.4s ease; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Grid System */
+        .items-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem; }
+        
+        /* Auction Card */
+        .auc-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; backdrop-filter: blur(10px); transition: all 0.3s; display: flex; flex-direction: column; position: relative; }
+        .auc-card:hover { transform: translateY(-5px); border-color: var(--primary); box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        .auc-img { width: 100%; height: 200px; object-fit: cover; border-bottom: 1px solid var(--border); }
+        .auc-body { padding: 1.2rem; flex: 1; display: flex; flex-direction: column; }
+        .auc-title { font-size: 1.3rem; font-weight: 800; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; }
+        
+        .auc-info-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; font-size: 0.95rem; }
+        .auc-label { color: var(--text-muted); }
+        .auc-val { font-weight: 800; }
+        .auc-val.price { color: var(--accent); font-family: 'JetBrains Mono', monospace; font-size: 1.1rem; }
+        
+        .time-badge { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.8); border: 1px solid var(--primary); padding: 5px 12px; border-radius: 50px; font-weight: 800; font-size: 0.9rem; color: #fff; backdrop-filter: blur(5px); }
+        .time-badge.urgent { color: var(--danger); border-color: var(--danger); animation: pulse 1s infinite; }
+        
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(231,76,60,0.7); } 70% { box-shadow: 0 0 0 10px rgba(231,76,60,0); } 100% { box-shadow: 0 0 0 0 rgba(231,76,60,0); } }
+        
+        .bid-controls { display: flex; gap: 0.5rem; margin-top: 1.5rem; }
+        .bid-input { flex: 1; background: rgba(0,0,0,0.3); border: 1px solid var(--border); color: #fff; padding: 0.8rem; border-radius: 10px; font-family: 'JetBrains Mono'; outline: none; }
+        .bid-input:focus { border-color: var(--primary); }
+        .btn { padding: 0.8rem 1.5rem; border: none; border-radius: 10px; font-family: 'Cairo'; font-weight: 800; font-size: 1rem; cursor: pointer; transition: 0.2s; color: #fff; }
+        .btn-bid { background: linear-gradient(135deg, var(--primary), #8e44ad); }
+        .btn-bid:hover:not(:disabled) { box-shadow: 0 0 15px rgba(155,89,182,0.6); transform: scale(1.02); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        .empty-state { text-align: center; padding: 4rem; color: var(--text-muted); grid-column: 1 / -1; }
+        .empty-state h3 { font-size: 1.5rem; color: var(--text); margin-bottom: 0.5rem; }
+        
+        /* Toast */
+        #toast { position: fixed; bottom: 30px; right: 30px; background: rgba(20,13,26,0.95); border: 1px solid var(--border); padding: 1rem 1.5rem; border-radius: 12px; backdrop-filter: blur(10px); transform: translateX(150%); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 1000; display: flex; align-items: center; gap: 10px; font-weight: 600; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        #toast.show { transform: translateX(0); }
+        #toast.success { border-color: var(--accent); color: var(--accent); }
+        #toast.error { border-color: var(--danger); color: var(--danger); }
+        
+        #loader { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; }
+        .spinner { width: 50px; height: 50px; border: 4px solid var(--primary); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+    </style>
+</head>
+<body>
+
+    <div id="loader">
+        <div class="spinner"></div>
+        <h3 style="margin-top: 1rem; color: var(--primary);">جاري تحميل المزاد...</h3>
+    </div>
+
+    <nav class="navbar">
+        <div class="nav-brand">⚖️ المزاد العلني</div>
+        <div class="user-profile">
+            <img id="user-avatar" src="" alt="Avatar">
+            <div class="user-info">
+                <span class="username" id="user-name">Loading...</span>
+                <div class="balances">
+                    <span>رصيد: <span id="user-wallet">0</span>💰</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('active', this)">🔥 المزادات النشطة</button>
+            <button class="tab-btn" onclick="switchTab('my-items', this)">🎒 ابدأ مزاد (ممتلكاتي)</button>
+        </div>
+
+        <div id="active-tab" class="tab-content active">
+            <div class="items-grid" id="auction-grid"></div>
+        </div>
+
+        <div id="my-items-tab" class="tab-content">
+            <div class="items-grid" id="inventory-grid"></div>
+        </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+        let appData = null;
+        let refreshInterval = null;
+
+        if (!token) {
+            showToast('رابط غير صالح', 'error');
+            document.getElementById('loader').innerHTML = `<h2 style="color:var(--danger)">❌ رابط غير صالح</h2>`;
+        } else {
+            fetchData();
+            // Refresh auctions every 10 seconds
+            refreshInterval = setInterval(fetchDataSilent, 10000);
+        }
+
+        async function fetchData() {
+            try {
+                const res = await fetch(`/api/auction/data?token=${token}`);
+                const data = await res.json();
+                if (!data.success) {
+                    document.getElementById('loader').innerHTML = `<h2 style="color:var(--danger)">❌ ${data.error}</h2>`;
+                    return;
+                }
+                appData = data;
+                updateUI();
+                setTimeout(() => { document.getElementById('loader').style.display = 'none'; }, 500);
+            } catch (err) {
+                document.getElementById('loader').innerHTML = `<h2 style="color:var(--danger)">❌ خطأ في الاتصال</h2>`;
+            }
+        }
+        
+        async function fetchDataSilent() {
+            try {
+                const res = await fetch(`/api/auction/data?token=${token}`);
+                const data = await res.json();
+                if (data.success) {
+                    appData = data;
+                    updateUI(); // This will re-render everything. A better approach would be DOM diffing, but full render is fine for a small app.
+                }
+            } catch (err) {}
+        }
+
+        function updateUI() {
+            document.getElementById('user-name').innerText = appData.user.username;
+            document.getElementById('user-avatar').src = appData.user.avatar || 'https://cdn.discordapp.com/embed/avatars/0.png';
+            document.getElementById('user-wallet').innerText = appData.user.balance.toLocaleString();
+
+            renderAuctions();
+            renderInventory();
+        }
+
+        function getTimeRemaining(endsAt) {
+            const total = endsAt - Date.now();
+            if (total <= 0) return 'انتهى';
+            const m = Math.floor((total / 1000 / 60) % 60);
+            const s = Math.floor((total / 1000) % 60);
+            return `${m}د ${s}ث`;
+        }
+        
+        function isUrgent(endsAt) {
+            return (endsAt - Date.now()) < 60000; // less than 1 min
+        }
+
+        function renderAuctions() {
+            const grid = document.getElementById('auction-grid');
+            grid.innerHTML = '';
+            
+            if (appData.auctions.length === 0) {
+                grid.innerHTML = `<div class="empty-state"><h3>📭 لا يوجد مزادات حالياً</h3><p>كن أول من يطرح غرضاً في المزاد!</p></div>`;
+                return;
+            }
+
+            for (const auc of appData.auctions) {
+                const item = auc.itemDetails;
+                const timeRem = getTimeRemaining(auc.endsAt);
+                const urgentClass = isUrgent(auc.endsAt) ? 'urgent' : '';
+                const myAuction = auc.sellerId === appData.user.userId; // Currently don't have userId in appData.user, but we can check if we can bid. Let's just use a flag.
+                // Actually the API blocks bidding if it's our auction, but we can just let the API throw the error for simplicity, or we can add userId to response.
+                
+                // Let's assume we can't reliably know here unless we add it, so let's just let the API handle the "can't bid on own" error.
+                const nextBid = auc.highestBid + Math.ceil(auc.highestBid * 0.05); // +5% minimum
+
+                grid.innerHTML += \`
+                    <div class="auc-card">
+                        <div class="time-badge \${urgentClass}">⏳ \${timeRem}</div>
+                        <img class="auc-img" src="\${item.image || 'https://via.placeholder.com/400x200?text=No+Image'}" alt="\${item.name}">
+                        <div class="auc-body">
+                            <div class="auc-title"><span>\${item.emoji} \${item.name}</span></div>
+                            
+                            <div class="auc-info-row">
+                                <span class="auc-label">البائع:</span>
+                                <span class="auc-val">\${auc.sellerName}</span>
+                            </div>
+                            <div class="auc-info-row">
+                                <span class="auc-label">أعلى مزايد:</span>
+                                <span class="auc-val">\${auc.highestBidderName || 'لا يوجد'}</span>
+                            </div>
+                            <div class="auc-info-row">
+                                <span class="auc-label">أعلى سعر:</span>
+                                <span class="auc-val price">\${auc.highestBid.toLocaleString()} 💰</span>
+                            </div>
+                            
+                            <div class="bid-controls">
+                                <input type="number" id="bid-val-\${auc.id}" class="bid-input" value="\${nextBid}" min="\${nextBid}">
+                                <button class="btn btn-bid" onclick="placeBid('\${auc.id}')">زايد 💸</button>
+                            </div>
+                        </div>
+                    </div>
+                \`;
+            }
+        }
+
+        function renderInventory() {
+            const grid = document.getElementById('inventory-grid');
+            grid.innerHTML = '';
+            
+            const invItems = Object.keys(appData.user.inventory);
+            if (invItems.length === 0) {
+                grid.innerHTML = \`<div class="empty-state"><h3>🎒 حقيبتك فارغة</h3><p>لا تملك عناصر لبيعها في المزاد.</p></div>\`;
+                return;
+            }
+
+            for (const id of invItems) {
+                const item = appData.items[id];
+                if (!item) continue;
+                
+                // Suggest starting bid at 50% of price
+                const startPrice = Math.floor(item.price * 0.5);
+
+                grid.innerHTML += \`
+                    <div class="auc-card">
+                        <img class="auc-img" src="\${item.image || 'https://via.placeholder.com/400x200?text=No+Image'}" alt="\${item.name}">
+                        <div class="auc-body">
+                            <div class="auc-title"><span>\${item.emoji} \${item.name}</span></div>
+                            <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:1rem;">قم بعرض هذا العنصر في المزاد. سيستمر المزاد لمدة 15 دقيقة.</p>
+                            
+                            <div class="bid-controls">
+                                <input type="number" id="start-val-\${id}" class="bid-input" value="\${startPrice}" min="1">
+                                <button class="btn btn-bid" onclick="startAuction('\${id}')">ابدأ المزاد 🚀</button>
+                            </div>
+                        </div>
+                    </div>
+                \`;
+            }
+        }
+
+        async function placeBid(auctionId) {
+            const bidAmount = document.getElementById(\`bid-val-\${auctionId}\`).value;
+            try {
+                const res = await fetch('/api/auction/bid', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token, auctionId, bidAmount })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('تمت المزايدة بنجاح! 🎉', 'success');
+                    fetchDataSilent(); // refresh immediately
+                } else {
+                    showToast(data.error, 'error');
+                }
+            } catch (err) {
+                showToast('خطأ في الاتصال بالخادم', 'error');
+            }
+        }
+
+        async function startAuction(itemId) {
+            const startingBid = document.getElementById(\`start-val-\${itemId}\`).value;
+            if(!confirm(\`هل أنت متأكد من بدء المزاد بسعر يبدأ من \${startingBid} 💰؟\n(سيتم خصم العنصر من حقيبتك فوراً)\`)) return;
+            
+            try {
+                const res = await fetch('/api/auction/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token, itemId, startingBid })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('تم طرح العنصر في المزاد بنجاح! 🚀', 'success');
+                    fetchData(); // refresh to move it from inventory to active auctions
+                    switchTab('active', document.querySelector('.tab-btn:first-child'));
+                } else {
+                    showToast(data.error, 'error');
+                }
+            } catch (err) {
+                showToast('خطأ في الاتصال بالخادم', 'error');
+            }
+        }
+
+        function switchTab(tab, btnElement) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            btnElement.classList.add('active');
+            document.getElementById(tab + '-tab').classList.add('active');
+        }
+
+        function showToast(msg, type) {
+            const toast = document.getElementById('toast');
+            toast.className = \`show \${type}\`;
+            toast.innerHTML = type === 'success' ? \`✅ \${msg}\` : \`❌ \${msg}\`;
+            setTimeout(() => { toast.className = ''; }, 3000);
+        }
+        
+        // Setup clock tick for UI every second
+        setInterval(() => {
+            if(appData && document.getElementById('active-tab').classList.contains('active')){
+                renderAuctions(); // re-render just to update times (if focus is on auctions)
+            }
+        }, 1000);
+    </script>
+</body>
+</html>
