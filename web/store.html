@@ -173,17 +173,17 @@
                     btnHtml = `<button class="btn" style="background:var(--secondary); color:var(--text-muted)" disabled>مملوك ✅</button>`;
                 }
 
-                grid.innerHTML += \`
+                grid.innerHTML += `
                     <div class="item-card">
-                        <img class="item-img" src="\${item.image || 'https://via.placeholder.com/400x200?text=No+Image'}" alt="\${item.name}">
+                        <img class="item-img" src="${item.image || 'https://via.placeholder.com/400x200?text=No+Image'}" alt="${item.name}">
                         <div class="item-body">
-                            <div class="item-title"><span>\${item.emoji} \${item.name}</span></div>
-                            <div class="item-desc">\${item.description}</div>
-                            <div class="item-price">\${item.price.toLocaleString()} 💰</div>
-                            \${btnHtml}
+                            <div class="item-title"><span>${item.emoji} ${item.name}</span></div>
+                            <div class="item-desc">${item.description}</div>
+                            <div class="item-price">${item.price.toLocaleString()} 💰</div>
+                            ${btnHtml}
                         </div>
                     </div>
-                \`;
+                `;
             }
         }
 
@@ -193,7 +193,7 @@
             
             const invItems = Object.keys(appData.user.inventory);
             if (invItems.length === 0) {
-                grid.innerHTML = \`<div class="empty-state"><h3>🎒 حقيبتك فارغة</h3><p>اذهب إلى المتجر لشراء بعض الممتلكات!</p></div>\`;
+                grid.innerHTML = `<div class="empty-state"><h3>🎒 حقيبتك فارغة</h3><p>اذهب إلى المتجر لشراء بعض الممتلكات!</p></div>`;
                 return;
             }
 
@@ -202,17 +202,17 @@
                 if (!item) continue;
                 const refund = Math.floor(item.price * 0.5);
 
-                grid.innerHTML += \`
+                grid.innerHTML += `
                     <div class="item-card">
-                        <img class="item-img" src="\${item.image || 'https://via.placeholder.com/400x200?text=No+Image'}" alt="\${item.name}">
+                        <img class="item-img" src="${item.image || 'https://via.placeholder.com/400x200?text=No+Image'}" alt="${item.name}">
                         <div class="item-body">
-                            <div class="item-title"><span>\${item.emoji} \${item.name}</span></div>
+                            <div class="item-title"><span>${item.emoji} ${item.name}</span></div>
                             <div class="item-desc">يمكنك بيع هذا العنصر واسترداد 50% من قيمته.</div>
-                            <div class="item-price" style="background:rgba(255,71,87,0.1); color:var(--danger)">+ \${refund.toLocaleString()} 💰</div>
-                            <button class="btn btn-sell" onclick="sellItem('\${id}')">بيع العنصر 🏷️</button>
+                            <div class="item-price" style="background:rgba(255,71,87,0.1); color:var(--danger)">+ ${refund.toLocaleString()} 💰</div>
+                            <button class="btn btn-sell" onclick="sellItem('${id}')">بيع العنصر 🏷️</button>
                         </div>
                     </div>
-                \`;
+                `;
             }
         }
 
@@ -250,7 +250,7 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    showToast(\`تم البيع واسترداد \${data.refund.toLocaleString()} 💰\`, 'success');
+                    showToast(`تم البيع واسترداد ${data.refund.toLocaleString()} 💰`, 'success');
                     appData.user.balance = data.newBalance;
                     delete appData.user.inventory[itemId];
                     updateUI();
@@ -271,8 +271,8 @@
 
         function showToast(msg, type) {
             const toast = document.getElementById('toast');
-            toast.className = \`show \${type}\`;
-            toast.innerHTML = type === 'success' ? \`✅ \${msg}\` : \`❌ \${msg}\`;
+            toast.className = `show ${type}`;
+            toast.innerHTML = type === 'success' ? `✅ ${msg}` : `❌ ${msg}`;
             setTimeout(() => { toast.className = ''; }, 3000);
         }
     </script>
