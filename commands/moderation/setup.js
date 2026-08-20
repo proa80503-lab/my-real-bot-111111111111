@@ -53,7 +53,7 @@ module.exports = {
 
             // تطبيق صلاحيات السجن على جميع القنوات
             for (const channel of guild.channels.cache.values()) {
-                if (channel.isTextBased() || channel.isVoiceBased()) {
+                if (channel.permissionOverwrites) {
                     if (channel.name.includes('سجن') || channel.name.includes('jail')) continue;
                     await channel.permissionOverwrites.edit(jailRole.id, {
                         SendMessages: false,
@@ -114,7 +114,7 @@ module.exports = {
 
             // تطبيق صلاحيات الكتم على جميع القنوات
             for (const channel of guild.channels.cache.values()) {
-                if (channel.isTextBased() || channel.isVoiceBased()) {
+                if (channel.permissionOverwrites) {
                     await channel.permissionOverwrites.edit(muteRole.id, {
                         SendMessages: false,
                         Speak: false,
