@@ -72,7 +72,7 @@ module.exports = {
             balance: (userData.balance || 0) - amount,
             investment: newInvestment,
             lastInvestment: Date.now(),
-            lastCollect: userData.lastCollect || Date.now() // تعيين آخر جمع إذا لم يكن موجوداً
+            lastCollect: Date.now() // FIX: دائماً نعيّن lastCollect الآن لمنع الجمع الفوري
         });
         db.addTransaction(message.author.id, 'invest', -amount, `Investment: +${amount}`);
 
