@@ -23,6 +23,7 @@ module.exports = {
     geminiApiKey: process.env.GEMINI_API_KEY || '',
     youtubeApiKey: process.env.YOUTUBE_API_KEY || '',
     hfToken: process.env.HF_TOKEN || '',
+    nvidiaApiKey: process.env.NVIDIA_API_KEY || '',
 
     // ─── إعدادات عامة ─────────────────────────────────────────────
     prefix: '!',
