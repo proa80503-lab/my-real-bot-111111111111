@@ -79,11 +79,14 @@ module.exports = {
                 earned = Math.floor(earned * boostMultiplier);
             }
 
-            // ── حفظ البيانات ────────────────────────────────────────────
-            const newBalance = (userData.balance || 0) + earned;
-            db.updateFields(userId, { balance: newBalance, lastWork: now });
-            db.addTransaction(userId, 'work', earned, `Work — ${job.name}`);
+            // ── حفظ البيانات (addMoney يطبق الحد تلقائياً) ───────────────
+            const actualEarned = db.addMoney(userId, earned);
+            db.updateFields(userId, { lastWork: now });
+            db.addTransaction(userId, 'work', actualEarned, `Work — ${job.name}`);
             levels.addXP(userId, job.xp, message);
+
+            // ── تقييم الراتب ─────────────────────────────────────────
+            const newBalance = (userData.balance || 0) + actualEarned;
 
             // ── تقييم الراتب ─────────────────────────────────────────────
             const earningPct = Math.round(((earned - job.min) / (job.max - job.min)) * 100);
