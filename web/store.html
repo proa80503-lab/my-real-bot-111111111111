@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>متجر البوت الفاخر</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0d0f1a;
+            --primary: #5865f2;
+            --secondary: #202236;
+            --text: #ffffff;
+            --text-muted: #a0a4cc;
+            --accent: #00ff88;
+            --danger: #ff4757;
+            --card-bg: rgba(32, 34, 54, 0.7);
+            --glass: rgba(255, 255, 255, 0.05);
+            --border: rgba(255, 255, 255, 0.1);
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Cairo', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+        body::before { content: ''; position: fixed; inset: 0; background: radial-gradient(circle at top left, rgba(88,101,242,0.15), transparent 40%), radial-gradient(circle at bottom right, rgba(0,255,136,0.1), transparent 40%); z-index: -1; }
+        
+        /* Navbar */
+        .navbar { display: flex; justify-content: space-between; align-items: center; padding: 1rem 2rem; background: rgba(13, 15, 26, 0.8); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+        .nav-brand { font-weight: 800; font-size: 1.5rem; color: var(--primary); display: flex; align-items: center; gap: 0.5rem; }
+        
+        .user-profile { display: flex; align-items: center; gap: 1rem; background: var(--glass); padding: 0.5rem 1rem; border-radius: 50px; border: 1px solid var(--border); }
+        .user-profile img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary); }
+        .user-info { display: flex; flex-direction: column; }
+        .username { font-weight: 600; font-size: 0.9rem; }
+        .balances { display: flex; gap: 0.5rem; font-size: 0.8rem; font-family: 'JetBrains Mono', monospace; color: var(--accent); }
+        
+        /* Container & Tabs */
+        .container { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+        .tabs { display: flex; gap: 1rem; margin-bottom: 2rem; justify-content: center; }
+        .tab-btn { background: var(--secondary); color: var(--text); border: 1px solid var(--border); padding: 0.8rem 2rem; border-radius: 12px; cursor: pointer; font-family: 'Cairo'; font-weight: 600; transition: all 0.3s; font-size: 1.1rem; }
+        .tab-btn.active { background: var(--primary); border-color: var(--primary); box-shadow: 0 4px 15px rgba(88,101,242,0.4); }
+        .tab-btn:hover:not(.active) { background: var(--glass); transform: translateY(-2px); }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.4s ease; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Grid System */
+        .items-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; }
+        
+        /* Item Card */
+        .item-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; backdrop-filter: blur(10px); transition: all 0.3s; display: flex; flex-direction: column; }
+        .item-card:hover { transform: translateY(-5px); border-color: var(--primary); box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        .item-img { width: 100%; height: 180px; object-fit: cover; border-bottom: 1px solid var(--border); }
+        .item-body { padding: 1.2rem; flex: 1; display: flex; flex-direction: column; }
+        .item-title { font-size: 1.2rem; font-weight: 800; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: space-between; }
+        .item-desc { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem; flex: 1; line-height: 1.5; }
+        .item-price { font-family: 'JetBrains Mono', monospace; font-size: 1.2rem; color: var(--accent); font-weight: 600; margin-bottom: 1rem; background: rgba(0,255,136,0.1); padding: 0.4rem 0.8rem; border-radius: 8px; display: inline-block; text-align: center; }
+        .btn { width: 100%; padding: 0.8rem; border: none; border-radius: 10px; font-family: 'Cairo'; font-weight: 800; font-size: 1rem; cursor: pointer; transition: 0.2s; color: #fff; }
+        .btn-buy { background: linear-gradient(135deg, var(--primary), #7289da); }
+        .btn-buy:hover { box-shadow: 0 0 15px rgba(88,101,242,0.6); transform: scale(1.02); }
+        .btn-sell { background: linear-gradient(135deg, var(--danger), #ff6b81); }
+        .btn-sell:hover { box-shadow: 0 0 15px rgba(255,71,87,0.6); transform: scale(1.02); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+        
+        .empty-state { text-align: center; padding: 4rem; color: var(--text-muted); grid-column: 1 / -1; }
+        .empty-state h3 { font-size: 1.5rem; color: var(--text); margin-bottom: 0.5rem; }
+        
+        /* Toast Notification */
+        #toast { position: fixed; bottom: 30px; right: 30px; background: rgba(13,15,26,0.95); border: 1px solid var(--border); padding: 1rem 1.5rem; border-radius: 12px; backdrop-filter: blur(10px); transform: translateX(150%); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 1000; display: flex; align-items: center; gap: 10px; font-weight: 600; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        #toast.show { transform: translateX(0); }
+        #toast.success { border-color: var(--accent); color: var(--accent); }
+        #toast.error { border-color: var(--danger); color: var(--danger); }
+        
+        /* Loading Overlay */
+        #loader { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; }
+        .spinner { width: 50px; height: 50px; border: 4px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        @media (max-width: 768px) {
+            .navbar { flex-direction: column; gap: 1rem; padding: 1rem; }
+            .user-profile { width: 100%; justify-content: center; }
+            .tabs { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loader">
+        <div class="spinner"></div>
+        <h3 style="margin-top: 1rem; color: var(--primary);">جاري تحميل المتجر...</h3>
+    </div>
+
+    <nav class="navbar">
+        <div class="nav-brand">🛒 متجر البوت المطور</div>
+        <div class="user-profile">
+            <img id="user-avatar" src="" alt="Avatar">
+            <div class="user-info">
+                <span class="username" id="user-name">Loading...</span>
+                <div class="balances">
+                    <span>محفظة: <span id="user-wallet">0</span>💰</span>
+                    <span>بنك: <span id="user-bank">0</span>💰</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('store', this)">🛍️ المتجر</button>
+            <button class="tab-btn" onclick="switchTab('inventory', this)">🎒 حقيبتي وممتلكاتي</button>
+        </div>
+
+        <div id="store-tab" class="tab-content active">
+            <div class="items-grid" id="store-grid"></div>
+        </div>
+
+        <div id="inventory-tab" class="tab-content">
+            <div class="items-grid" id="inventory-grid"></div>
+        </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+        let appData = null;
+
+        if (!token) {
+            showToast('رابط غير صالح', 'error');
+            document.getElementById('loader').innerHTML = `<h2 style="color:var(--danger)">❌ رابط غير صالح</h2>`;
+        } else {
+            fetchData();
+        }
+
+        async function fetchData() {
+            try {
+                const res = await fetch(`/api/store/data?token=${token}`);
+                const data = await res.json();
+                if (!data.success) {
+                    document.getElementById('loader').innerHTML = `<h2 style="color:var(--danger)">❌ ${data.error}</h2>`;
+                    return;
+                }
+                appData = data;
+                updateUI();
+                setTimeout(() => { document.getElementById('loader').style.display = 'none'; }, 500);
+            } catch (err) {
+                document.getElementById('loader').innerHTML = `<h2 style="color:var(--danger)">❌ خطأ في الاتصال</h2>`;
+            }
+        }
+
+        function updateUI() {
+            document.getElementById('user-name').innerText = appData.user.username;
+            document.getElementById('user-avatar').src = appData.user.avatar || 'https://cdn.discordapp.com/embed/avatars/0.png';
+            document.getElementById('user-wallet').innerText = appData.user.balance.toLocaleString();
+            document.getElementById('user-bank').innerText = appData.user.bank.toLocaleString();
+
+            renderStore();
+            renderInventory();
+        }
+
+        function renderStore() {
+            const grid = document.getElementById('store-grid');
+            grid.innerHTML = '';
+            
+            for (const [id, item] of Object.entries(appData.items)) {
+                const isOwned = !!appData.user.inventory[id] && id !== 'bankextend' && id !== 'moneybag';
+                const canAfford = appData.user.balance >= item.price;
+                
+                let btnHtml = `<button class="btn btn-buy" onclick="buyItem('${id}')" ${!canAfford ? 'disabled' : ''}>شراء 🛒</button>`;
+                if (isOwned) {
+                    btnHtml = `<button class="btn" style="background:var(--secondary); color:var(--text-muted)" disabled>مملوك ✅</button>`;
+                }
+
+                grid.innerHTML += \`
+                    <div class="item-card">
+                        <img class="item-img" src="\${item.image || 'https://via.placeholder.com/400x200?text=No+Image'}" alt="\${item.name}">
+                        <div class="item-body">
+                            <div class="item-title"><span>\${item.emoji} \${item.name}</span></div>
+                            <div class="item-desc">\${item.description}</div>
+                            <div class="item-price">\${item.price.toLocaleString()} 💰</div>
+                            \${btnHtml}
+                        </div>
+                    </div>
+                \`;
+            }
+        }
+
+        function renderInventory() {
+            const grid = document.getElementById('inventory-grid');
+            grid.innerHTML = '';
+            
+            const invItems = Object.keys(appData.user.inventory);
+            if (invItems.length === 0) {
+                grid.innerHTML = \`<div class="empty-state"><h3>🎒 حقيبتك فارغة</h3><p>اذهب إلى المتجر لشراء بعض الممتلكات!</p></div>\`;
+                return;
+            }
+
+            for (const id of invItems) {
+                const item = appData.items[id];
+                if (!item) continue;
+                const refund = Math.floor(item.price * 0.5);
+
+                grid.innerHTML += \`
+                    <div class="item-card">
+                        <img class="item-img" src="\${item.image || 'https://via.placeholder.com/400x200?text=No+Image'}" alt="\${item.name}">
+                        <div class="item-body">
+                            <div class="item-title"><span>\${item.emoji} \${item.name}</span></div>
+                            <div class="item-desc">يمكنك بيع هذا العنصر واسترداد 50% من قيمته.</div>
+                            <div class="item-price" style="background:rgba(255,71,87,0.1); color:var(--danger)">+ \${refund.toLocaleString()} 💰</div>
+                            <button class="btn btn-sell" onclick="sellItem('\${id}')">بيع العنصر 🏷️</button>
+                        </div>
+                    </div>
+                \`;
+            }
+        }
+
+        async function buyItem(itemId) {
+            try {
+                const res = await fetch('/api/store/buy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token, itemId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('تم الشراء بنجاح! 🎉', 'success');
+                    appData.user.balance = data.newBalance;
+                    // Optimistic update for UI
+                    if(itemId !== 'bankextend' && itemId !== 'moneybag') {
+                        appData.user.inventory[itemId] = { purchasedAt: Date.now() };
+                    }
+                    updateUI();
+                } else {
+                    showToast(data.error, 'error');
+                }
+            } catch (err) {
+                showToast('خطأ في الاتصال بالخادم', 'error');
+            }
+        }
+
+        async function sellItem(itemId) {
+            if(!confirm('هل أنت متأكد من بيع هذا العنصر بنصف قيمته؟')) return;
+            try {
+                const res = await fetch('/api/store/sell', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token, itemId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(\`تم البيع واسترداد \${data.refund.toLocaleString()} 💰\`, 'success');
+                    appData.user.balance = data.newBalance;
+                    delete appData.user.inventory[itemId];
+                    updateUI();
+                } else {
+                    showToast(data.error, 'error');
+                }
+            } catch (err) {
+                showToast('خطأ في الاتصال بالخادم', 'error');
+            }
+        }
+
+        function switchTab(tab, btnElement) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            btnElement.classList.add('active');
+            document.getElementById(tab + '-tab').classList.add('active');
+        }
+
+        function showToast(msg, type) {
+            const toast = document.getElementById('toast');
+            toast.className = \`show \${type}\`;
+            toast.innerHTML = type === 'success' ? \`✅ \${msg}\` : \`❌ \${msg}\`;
+            setTimeout(() => { toast.className = ''; }, 3000);
+        }
+    </script>
+</body>
+</html>
