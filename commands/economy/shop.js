@@ -9,11 +9,12 @@
 
 const {
     ActionRowBuilder, ButtonBuilder, ButtonStyle,
-    EmbedBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, MessageFlags
+    EmbedBuilder, MessageFlags
 } = require('discord.js');
 
 const db = require('../../utils/database');
 const config = require('../../config');
+const dashboard = require('../../dashboard-server');
 
 // الفئات المتاحة في المتجر بناءً على التصنيفات
 const CATEGORIES = {
@@ -27,43 +28,32 @@ const CATEGORIES = {
 // ─────────────────────────────────────────────
 // بناء رسالة القائمة الرئيسية للفئات
 // ─────────────────────────────────────────────
-function buildMainShop(userId) {
-    const userData = db.getUserData(userId);
+function buildMainShop(user) {
+    const userData = db.getUserData(user.id);
     const balance = userData.balance || 0;
     const bank = userData.bank || 0;
 
+    const token = dashboard.generateWebToken(user);
+    const storeUrl = `${process.env.RENDER_EXTERNAL_URL || 'http://localhost:' + (process.env.PORT || 3000)}/store?token=${token}`;
+
     const embed = new EmbedBuilder()
         .setColor('#2C3E50')
-        .setTitle('🛒 متجر الخوادم الفاخر')
-        .setDescription('مرحباً بك في المتجر المطور! اختر الفئة التي تريد تصفحها من القائمة بالأسفل.')
+        .setTitle('🛒 متجر الخوادم الفاخر (الويب)')
+        .setDescription('مرحباً بك في المتجر المطور! لقد تم نقل المتجر إلى واجهة ويب ديناميكية وتفاعلية.\n\nاضغط على الزر أدناه للدخول إلى متجرك الخاص.')
         .addFields({
             name: '💰 رصيدك الحالي',
             value: `المحفظة: **${balance.toLocaleString()}** | البنك: **${bank.toLocaleString()}** ${config.currency}`,
             inline: false
         })
         .setImage('https://images.unsplash.com/photo-1555529771-835f59fc5efe?q=80&w=800') // صورة ترحيبية للمتجر
-        .setFooter({ text: 'اختر فئة من القائمة المنسدلة أدناه' })
+        .setFooter({ text: 'هذا الرابط خاص بك وينتهي بعد ساعتين.' })
         .setTimestamp();
 
-    const selectMenu = new StringSelectMenuBuilder()
-        .setCustomId('shop_category_select')
-        .setPlaceholder('اختر فئة لتصفح الأغراض...')
-        .addOptions(
-            Object.entries(CATEGORIES).map(([key, data]) => 
-                new StringSelectMenuOptionBuilder()
-                    .setLabel(data.label)
-                    .setValue(key)
-                    .setEmoji(data.emoji)
-            )
-        );
-
-    const row1 = new ActionRowBuilder().addComponents(selectMenu);
-    
-    const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('shop_inv').setLabel('🎒 حقيبتي').setStyle(ButtonStyle.Secondary)
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setLabel('🌐 الدخول للمتجر').setStyle(ButtonStyle.Link).setURL(storeUrl)
     );
 
-    return { embeds: [embed], components: [row1, row2] };
+    return { embeds: [embed], components: [row] };
 }
 
 // ─────────────────────────────────────────────
@@ -323,8 +313,8 @@ module.exports = {
 
     async execute(message) {
         try {
-            const userId = message.author.id;
-            const msg = buildMainShop(userId);
+            const user = message.author;
+            const msg = buildMainShop(user);
             await message.reply({ ...msg });
         } catch (err) {
             console.error('[Shop Error]', err);
