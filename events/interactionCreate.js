@@ -48,12 +48,30 @@ module.exports = {
                     'status_btn_', 'company_name', 'company_desc', 'company_logo', 'company_color', 'room_create'
                 ];
                 const isModalBtn = modalPrefixes.some(p => id.startsWith(p));
-                const needsDeferReply = id.startsWith('color_') || id.startsWith('colorole_');
+                const needsDeferReply = id.startsWith('color_') || id.startsWith('colorole_')
+                    || id.startsWith('work_') || id.startsWith('daily_')
+                    || id.startsWith('bot_guide_');
 
                 if (!isModalBtn && !needsDeferReply) {
                     await interaction.deferUpdate().catch(() => {});
                 } else if (!isModalBtn && needsDeferReply) {
                     await interaction.deferReply({ ephemeral: true }).catch(() => {});
+                }
+
+                // ── مساعد لكشف ephemeral بجميع الأشكال ─────────────────────
+                function _isEphemeral(options) {
+                    if (!options) return false;
+                    if (options.ephemeral === true) return true;
+                    const f = options.flags;
+                    if (!f) return false;
+                    // flags رقم مباشر
+                    if (typeof f === 'number') return (f & 64) !== 0;
+                    // flags كـ BitField object
+                    if (typeof f === 'object') {
+                        if (typeof f.has === 'function') return f.has(64);
+                        if (typeof f.bitfield === 'number') return (f.bitfield & 64) !== 0;
+                    }
+                    return false;
                 }
 
                 // Monkey-patch update to editReply if deferred
@@ -67,8 +85,7 @@ module.exports = {
                 const origReply = interaction.reply.bind(interaction);
                 interaction.reply = async (options) => {
                     if (interaction.deferred || interaction.replied) {
-                        const isEph = options.ephemeral || (options.flags && (options.flags === 64 || options.flags.bitfield === 64));
-                        return interaction.followUp({ ...options, ephemeral: !!isEph }).catch(()=>{});
+                        return interaction.followUp({ ...options, ephemeral: _isEphemeral(options) }).catch(()=>{});
                     }
                     return origReply(options);
                 };
