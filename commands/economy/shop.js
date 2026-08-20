@@ -9,8 +9,9 @@
 
 const {
     ActionRowBuilder, ButtonBuilder, ButtonStyle,
-    EmbedBuilder, MessageFlags
+    EmbedBuilder, MessageFlags, StringSelectMenuBuilder
 } = require('discord.js');
+
 
 const db = require('../../utils/database');
 const config = require('../../config');
@@ -268,6 +269,7 @@ function buildInventory(userId) {
 async function handleShopButton(interaction) {
     const id = interaction.customId;
     const userId = interaction.user.id;
+    const user = interaction.user;
 
     // قائمة الفئات
     if (id === 'shop_category_select') {
@@ -285,7 +287,7 @@ async function handleShopButton(interaction) {
 
     // الرجوع للرئيسية
     if (id === 'shop_main') {
-        const msg = buildMainShop(userId);
+        const msg = buildMainShop(user);
         return interaction.update({ ...msg });
     }
 
