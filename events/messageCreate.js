@@ -576,8 +576,6 @@ async function _handleAIReply(message, isRandomDrop = false) {
         await dailyChallenges.updateProgress(message.author.id, 'ai_chat', 1, message).catch(() => { });
     }
 
-    await message.channel.sendTyping().catch(() => { });
-
     const nvidiaToken = config.nvidiaApiKey;
     if (!nvidiaToken) {
         if (!isRandomDrop) return message.reply('❌ مفتاح NVIDIA API غير مفعل في البوت. الرجاء إضافته في ملف .env');
@@ -606,6 +604,12 @@ async function _handleAIReply(message, isRandomDrop = false) {
         _aiUserCooldown.set(message.author.id, Date.now());
     }
 
+    // FIX: إرسال مؤشر الكتابة بشكل متكرر حتى لا يتوقف قبل الرد
+    await message.channel.sendTyping().catch(() => {});
+    const typingInterval = setInterval(() => {
+        message.channel.sendTyping().catch(() => {});
+    }, 8000);
+
     try {
         const response = await axios.post(
             'https://integrate.api.nvidia.com/v1/chat/completions',
@@ -624,9 +628,11 @@ async function _handleAIReply(message, isRandomDrop = false) {
                     'Authorization': `Bearer ${nvidiaToken}`,
                     'Content-Type': 'application/json',
                 },
-                timeout: 30000,
+                timeout: 15000, // FIX: تقليل timeout من 30s إلى 15s للاستجابة الأسرع
             }
         );
+
+        clearInterval(typingInterval);
 
         let answer = response.data?.choices?.[0]?.message?.content?.trim() || '';
 
@@ -644,7 +650,22 @@ async function _handleAIReply(message, isRandomDrop = false) {
         if (!isRandomDrop) return message.reply('هسه ما جاني رد — جرب مرة ثانية 😅');
 
     } catch (err) {
+        clearInterval(typingInterval);
         console.error('[NVIDIA AI Error]', err.response?.data || err.message);
-        if (!isRandomDrop) return message.reply('تعطلت هسة 😩 جرب بعدين (تأكد من صحة مفتاح NVIDIA)');
+        // FIX: ردود محلية سريعة عند فشل NVIDIA بدلاً من صمت أو رسالة باردة
+        if (!isRandomDrop) {
+            const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout');
+            if (isTimeout) {
+                // رد محلي عراقي عند timeout بدلاً من الانتظار
+                const localReplies = [
+                    'يمعود صرلي تأخر بالإجابة، اسأل مرة ثانية شوية 😅',
+                    'والله الإنترنت يلعب يبدو، جرب بعد لحظة أخوي 🙏',
+                    'الشبكة قاطعة هسة، عود معي بعد ثانية 😬',
+                ];
+                const localReply = aiBrain.buildLocalReply(userText, message.author.id);
+                return message.reply(localReply || localReplies[Math.floor(Math.random() * localReplies.length)]);
+            }
+            return message.reply('تعطلت هسة 😩 جرب بعدين');
+        }
     }
 }
