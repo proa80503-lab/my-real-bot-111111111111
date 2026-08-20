@@ -74,24 +74,23 @@ module.exports = {
                 dailyAmount = Math.floor(dailyAmount * 1.25);
             }
 
-            // حد المحفظة
+            // حد المحفظة (تطبيقه مركزياً في db.addMoney — لكن نتحقق هنا للرد المناسب)
             const currentBal = userData.balance || 0;
-            const maxWallet = config.maxWalletBalance || 5_000_000;
+            const maxWallet = db.LIMITS.MAX_WALLET;
             if (currentBal >= maxWallet) {
                 return message.reply(
                     `❌ محفظتك ممتلئة! (**${currentBal.toLocaleString()} ${config.currency}**)\n` +
                     `> 💡 استخدم \`إيداع\` لوضع المال في البنك أولاً.`
                 );
             }
-            dailyAmount = Math.min(dailyAmount, maxWallet - currentBal);
 
-            // ── حفظ البيانات ─────────────────────────────────────────
+            // ── حفظ البيانات (addMoney يطبق الحد تلقائياً) ───────────────
+            const actualAdded = db.addMoney(userId, dailyAmount);
             db.updateFields(userId, {
-                balance: currentBal + dailyAmount,
                 lastDaily: now,
                 dailyStreak: streak,
             });
-            db.addTransaction(userId, 'daily', dailyAmount, `Daily (Streak: ${streak})`);
+            db.addTransaction(userId, 'daily', actualAdded, `Daily (Streak: ${streak})`);
 
             // ── Milestone ─────────────────────────────────────────────
             const milestones = { 7: '🥈 أسبوع كامل!', 14: '🥇 أسبوعان!', 30: '💎 شهر كامل!', 100: '👑 100 يوم!' };
@@ -99,7 +98,7 @@ module.exports = {
             const streakEmoji = streak >= 30 ? '👑' : streak >= 14 ? '🔥🔥' : streak >= 7 ? '🔥' : '✨';
 
             // ── بناء الـ Embed ─────────────────────────────────────────
-            const newBalance = currentBal + dailyAmount;
+            const newBalance = currentBal + actualAdded;
             const embed = new EmbedBuilder()
                 .setColor('#FFD700')
                 .setTitle('🎁 مكافأتك اليومية')
