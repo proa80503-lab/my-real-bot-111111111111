@@ -14,6 +14,26 @@ const fs     = require('fs');
 const path   = require('path');
 const db     = require('./utils/database');
 const dConf  = require('./utils/dashboard-config');
+const config = require('./config'); // Needed for shopItems
+
+// ─── Token Management for Web UIs (Store/Auction) ─────────────────────────
+const webTokens = new Map(); // token -> { userId, username, avatar, expiresAt }
+
+function generateWebToken(user) {
+    const token = crypto.randomBytes(16).toString('hex');
+    webTokens.set(token, {
+        userId: user.id,
+        username: user.username,
+        avatar: user.displayAvatarURL({ dynamic: true, size: 128 }),
+        expiresAt: Date.now() + (1000 * 60 * 60 * 2) // 2 hours
+    });
+    return token;
+}
+module.exports.generateWebToken = generateWebToken;
+
+// ─── Auction State Manager ──────────────────────────────────────────────────
+const activeAuctions = new Map(); // auctionId -> { itemId, sellerId, sellerName, highestBid, highestBidderId, highestBidderName, endsAt }
+
 
 // ─── الإعدادات ───────────────────────────────────────────────────────────────
 const PORT           = process.env.PORT || 3000;
@@ -613,7 +633,22 @@ const server = http.createServer(async (req, res) => {
         
         if (urlPath === '/api/control/gift') {
             if (!body.userId || !body.amount) return sendJson(400, { success: false, error: 'بيانات ناقصة' });
+            
+            // Add money to database
             db.addMoney(body.userId, body.amount);
+            
+            // Send DM to the user
+            if (_client) {
+                try {
+                    const user = await _client.users.fetch(body.userId);
+                    if (user) {
+                        await user.send(`🎁 **صاحب البوت ارسلك هدية يا فقير!**\nالمبلغ: **${body.amount.toLocaleString()}** 💰`);
+                    }
+                } catch (err) {
+                    console.error('[Dashboard] Failed to send gift DM:', err.message);
+                }
+            }
+            
             return sendJson(200, { success: true });
         }
 
@@ -659,6 +694,192 @@ const server = http.createServer(async (req, res) => {
         return res.end(JSON.stringify(readLogs(300)));
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // ─── Store & Auction Web API ───────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════════
+    
+    // Clean up expired tokens periodically
+    if (Math.random() < 0.1) {
+        const now = Date.now();
+        for (const [t, data] of webTokens.entries()) {
+            if (now > data.expiresAt) webTokens.delete(t);
+        }
+    }
+
+    if (urlPath === '/api/store/data' || urlPath === '/api/store/buy' || urlPath === '/api/store/sell' || 
+        urlPath === '/api/auction/data' || urlPath === '/api/auction/start' || urlPath === '/api/auction/bid') {
+        
+        const tokenStr = params.get('token') || (req.method === 'POST' ? (await readBody()).token : null);
+        const session = webTokens.get(tokenStr);
+        if (!session || Date.now() > session.expiresAt) {
+            return sendJson(401, { success: false, error: 'انتهت صلاحية الجلسة، الرجاء كتابة الأمر في الديسكورد مجدداً' });
+        }
+        
+        const userId = session.userId;
+        const userData = db.getUserData(userId);
+
+        if (req.method === 'GET' && urlPath === '/api/store/data') {
+            return sendJson(200, {
+                success: true,
+                user: {
+                    username: session.username,
+                    avatar: session.avatar,
+                    balance: userData.balance || 0,
+                    bank: userData.bank || 0,
+                    inventory: userData.inventory || {}
+                },
+                items: config.shopItems
+            });
+        }
+
+        if (req.method === 'POST' && urlPath === '/api/store/buy') {
+            const body = await readBody();
+            const itemId = body.itemId;
+            const item = config.shopItems[itemId];
+            
+            if (!item) return sendJson(400, { success: false, error: 'عنصر غير موجود' });
+            if ((userData.balance || 0) < item.price) return sendJson(400, { success: false, error: 'رصيدك لا يكفي' });
+            if (userData.inventory && userData.inventory[itemId]) return sendJson(400, { success: false, error: 'أنت تملك هذا العنصر بالفعل' });
+            
+            const removed = db.removeMoney(userId, item.price);
+            if (!removed) return sendJson(400, { success: false, error: 'رصيدك لا يكفي' });
+            
+            db.addTransaction(userId, 'shop_buy_web', item.price, `Bought ${item.name} from Web`);
+            
+            const inv = userData.inventory || {};
+            const now = Date.now();
+            
+            // Special items handling could go here, but for now we just add to inventory
+            if (itemId !== 'bankextend') {
+                inv[itemId] = { purchasedAt: now, expiresAt: item.duration === 999 ? null : now + (item.duration * 24 * 60 * 60 * 1000) };
+            } else {
+                db.updateFields(userId, { bankCap: (userData.bankCap || 0) + 50000 });
+            }
+            
+            if (itemId === 'moneybag') {
+                const cash = Math.floor(Math.random() * 5000) + 1000;
+                db.addMoney(userId, cash);
+                delete inv[itemId];
+            }
+            
+            db.updateFields(userId, { inventory: inv });
+            return sendJson(200, { success: true, newBalance: db.getUserData(userId).balance });
+        }
+
+        if (req.method === 'POST' && urlPath === '/api/store/sell') {
+            const body = await readBody();
+            const itemId = body.itemId;
+            const item = config.shopItems[itemId];
+            
+            if (!item) return sendJson(400, { success: false, error: 'عنصر غير موجود' });
+            if (!userData.inventory || !userData.inventory[itemId]) return sendJson(400, { success: false, error: 'أنت لا تملك هذا العنصر' });
+            
+            // Refund 50%
+            const refund = Math.floor(item.price * 0.5);
+            const inv = { ...userData.inventory };
+            delete inv[itemId];
+            
+            db.updateFields(userId, { inventory: inv });
+            db.addMoney(userId, refund);
+            db.addTransaction(userId, 'shop_sell_web', refund, `Sold ${item.name} from Web`);
+            
+            return sendJson(200, { success: true, refund, newBalance: db.getUserData(userId).balance });
+        }
+        
+        // --- Auction API ---
+        if (req.method === 'GET' && urlPath === '/api/auction/data') {
+            const now = Date.now();
+            const active = [];
+            for (const [id, auc] of activeAuctions.entries()) {
+                if (now > auc.endsAt) {
+                    // Process ended auction
+                    if (auc.highestBidderId) {
+                        // Transfer item
+                        const buyerData = db.getUserData(auc.highestBidderId);
+                        const buyerInv = buyerData.inventory || {};
+                        buyerInv[auc.itemId] = { purchasedAt: now, expiresAt: config.shopItems[auc.itemId].duration === 999 ? null : now + (config.shopItems[auc.itemId].duration * 24 * 60 * 60 * 1000) };
+                        db.updateFields(auc.highestBidderId, { inventory: buyerInv });
+                        
+                        // Give money to seller
+                        db.addMoney(auc.sellerId, auc.highestBid);
+                    } else {
+                        // Return item to seller
+                        const sellerData = db.getUserData(auc.sellerId);
+                        const sellerInv = sellerData.inventory || {};
+                        sellerInv[auc.itemId] = { purchasedAt: now, expiresAt: config.shopItems[auc.itemId].duration === 999 ? null : now + (config.shopItems[auc.itemId].duration * 24 * 60 * 60 * 1000) };
+                        db.updateFields(auc.sellerId, { inventory: sellerInv });
+                    }
+                    activeAuctions.delete(id);
+                } else {
+                    active.push({ id, ...auc, itemDetails: config.shopItems[auc.itemId] });
+                }
+            }
+            
+            return sendJson(200, {
+                success: true,
+                user: { username: session.username, avatar: session.avatar, balance: userData.balance || 0, inventory: userData.inventory || {} },
+                auctions: active,
+                items: config.shopItems
+            });
+        }
+        
+        if (req.method === 'POST' && urlPath === '/api/auction/start') {
+            const body = await readBody();
+            const itemId = body.itemId;
+            const startingBid = Number(body.startingBid);
+            
+            if (!itemId || !startingBid || startingBid < 1) return sendJson(400, { success: false, error: 'بيانات غير صالحة' });
+            if (!userData.inventory || !userData.inventory[itemId]) return sendJson(400, { success: false, error: 'أنت لا تملك هذا العنصر لبيعه' });
+            
+            // Remove item from inventory
+            const inv = { ...userData.inventory };
+            delete inv[itemId];
+            db.updateFields(userId, { inventory: inv });
+            
+            const auctionId = crypto.randomBytes(8).toString('hex');
+            activeAuctions.set(auctionId, {
+                itemId,
+                sellerId: userId,
+                sellerName: session.username,
+                highestBid: startingBid,
+                highestBidderId: null,
+                highestBidderName: null,
+                endsAt: Date.now() + (1000 * 60 * 15) // 15 minutes auction
+            });
+            
+            return sendJson(200, { success: true });
+        }
+        
+        if (req.method === 'POST' && urlPath === '/api/auction/bid') {
+            const body = await readBody();
+            const auctionId = body.auctionId;
+            const bidAmount = Number(body.bidAmount);
+            
+            const auc = activeAuctions.get(auctionId);
+            if (!auc) return sendJson(400, { success: false, error: 'المزاد غير موجود أو انتهى' });
+            if (Date.now() > auc.endsAt) return sendJson(400, { success: false, error: 'لقد انتهى هذا المزاد' });
+            if (auc.sellerId === userId) return sendJson(400, { success: false, error: 'لا يمكنك المزايدة على مزادك الخاص' });
+            if (bidAmount <= auc.highestBid) return sendJson(400, { success: false, error: `يجب أن تكون المزايدة أكبر من ${auc.highestBid.toLocaleString()}` });
+            if ((userData.balance || 0) < bidAmount) return sendJson(400, { success: false, error: 'رصيدك لا يكفي للمزايدة' });
+            
+            // Remove money from new bidder
+            if (!db.removeMoney(userId, bidAmount)) return sendJson(400, { success: false, error: 'رصيدك لا يكفي' });
+            
+            // Refund previous bidder if exists
+            if (auc.highestBidderId) {
+                db.addMoney(auc.highestBidderId, auc.highestBid);
+            }
+            
+            // Update auction state
+            auc.highestBid = bidAmount;
+            auc.highestBidderId = userId;
+            auc.highestBidderName = session.username;
+            
+            return sendJson(200, { success: true });
+        }
+    }
+
+
     // ─ Dashboard (يحتاج مفتاح)
     if (urlPath === '/dashboard') {
         if (reqKey !== DASHBOARD_KEY) {
@@ -667,6 +888,34 @@ const server = http.createServer(async (req, res) => {
         }
         res.writeHead(200, {'Content-Type':'text/html;charset=utf-8'});
         return res.end(buildHTML(_client));
+    }
+
+    // ─ Store & Auction Web Pages
+    if (urlPath === '/store' || urlPath === '/auction') {
+        const token = params.get('token');
+        if (!token || !webTokens.has(token)) {
+            res.writeHead(401, {'Content-Type':'text/html;charset=utf-8'});
+            return res.end(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>❌ غير مصرح</title><style>body{font-family:Cairo,sans-serif;background:#0a0b1a;color:#ed4245;display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px}h1{font-size:28px}p{color:#7b7d9e;font-size:14px}</style></head><body><h1>🔒 الرابط غير صالح أو منتهي الصلاحية</h1><p>يرجى كتابة الأمر مرة أخرى في الديسكورد</p></body></html>`);
+        }
+        
+        // We serve a static HTML file that fetches data via API using the token
+        const fs = require('fs');
+        const path = require('path');
+        const file = urlPath === '/store' ? 'store.html' : 'auction.html';
+        const filePath = path.join(__dirname, 'web', file);
+        
+        try {
+            if (fs.existsSync(filePath)) {
+                res.writeHead(200, {'Content-Type':'text/html;charset=utf-8'});
+                return res.end(fs.readFileSync(filePath, 'utf8'));
+            } else {
+                res.writeHead(404);
+                return res.end('Web UI file not found.');
+            }
+        } catch (e) {
+            res.writeHead(500);
+            return res.end('Internal Server Error');
+        }
     }
 
     res.writeHead(404); res.end('Not Found');
