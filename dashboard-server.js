@@ -21,10 +21,19 @@ const webTokens = new Map(); // token -> { userId, username, avatar, expiresAt }
 
 function generateWebToken(user) {
     const token = crypto.randomBytes(16).toString('hex');
+    // Safe avatar retrieval — works whether user is a GuildMember or User object
+    let avatar;
+    try {
+        avatar = typeof user.displayAvatarURL === 'function'
+            ? user.displayAvatarURL({ dynamic: true, size: 128 })
+            : `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.webp?size=128`;
+    } catch {
+        avatar = `https://cdn.discordapp.com/embed/avatars/0.png`;
+    }
     webTokens.set(token, {
         userId: user.id,
-        username: user.username,
-        avatar: user.displayAvatarURL({ dynamic: true, size: 128 }),
+        username: user.username || user.globalName || 'مستخدم',
+        avatar,
         expiresAt: Date.now() + (1000 * 60 * 60 * 2) // 2 hours
     });
     return token;
@@ -614,16 +623,25 @@ const server = http.createServer(async (req, res) => {
         res.end(JSON.stringify(data));
     };
 
-    // Helper for reading JSON body
-    const readBody = () => new Promise(resolve => {
-        let body = '';
-        req.on('data', c => body += c);
-        req.on('end', () => { try { resolve(JSON.parse(body)); } catch { resolve({}); } });
-    });
+    // ── CRITICAL FIX: Read the body ONCE for all POST requests ───────────────
+    // readBody() drains the request stream. It must only be called once per request.
+    let _bodyCache = null;
+    const getBody = () => {
+        if (_bodyCache !== null) return Promise.resolve(_bodyCache);
+        return new Promise(resolve => {
+            let raw = '';
+            req.on('data', c => raw += c);
+            req.on('end', () => {
+                try { _bodyCache = JSON.parse(raw); }
+                catch { _bodyCache = {}; }
+                resolve(_bodyCache);
+            });
+        });
+    };
 
     if (req.method === 'POST' && urlPath.startsWith('/api/control/')) {
         if (reqKey !== DASHBOARD_KEY) return sendJson(401, { success: false, error: 'Unauthorized' });
-        const body = await readBody();
+        const body = await getBody();
 
         if (urlPath === '/api/control/response') {
             if (!body.trigger || !body.response) return sendJson(400, { success: false, error: 'بيانات ناقصة' });
@@ -642,7 +660,7 @@ const server = http.createServer(async (req, res) => {
                 try {
                     const user = await _client.users.fetch(body.userId);
                     if (user) {
-                        await user.send(`🎁 **صاحب البوت ارسلك هدية يا فقير!**\nالمبلغ: **${body.amount.toLocaleString()}** 💰`);
+                        await user.send(`🎁 **صاحب البوت ارسلك هدية يا فقير!**\nالمبلغ: **${Number(body.amount).toLocaleString()}** 💰`);
                     }
                 } catch (err) {
                     console.error('[Dashboard] Failed to send gift DM:', err.message);
@@ -709,7 +727,13 @@ const server = http.createServer(async (req, res) => {
     if (urlPath === '/api/store/data' || urlPath === '/api/store/buy' || urlPath === '/api/store/sell' || 
         urlPath === '/api/auction/data' || urlPath === '/api/auction/start' || urlPath === '/api/auction/bid') {
         
-        const tokenStr = params.get('token') || (req.method === 'POST' ? (await readBody()).token : null);
+        // Token can be in query string (GET) or body (POST)
+        let tokenStr = params.get('token');
+        if (!tokenStr && req.method === 'POST') {
+            const body = await getBody();
+            tokenStr = body.token;
+        }
+        
         const session = webTokens.get(tokenStr);
         if (!session || Date.now() > session.expiresAt) {
             return sendJson(401, { success: false, error: 'انتهت صلاحية الجلسة، الرجاء كتابة الأمر في الديسكورد مجدداً' });
@@ -733,41 +757,43 @@ const server = http.createServer(async (req, res) => {
         }
 
         if (req.method === 'POST' && urlPath === '/api/store/buy') {
-            const body = await readBody();
+            const body = await getBody();
             const itemId = body.itemId;
             const item = config.shopItems[itemId];
             
             if (!item) return sendJson(400, { success: false, error: 'عنصر غير موجود' });
             if ((userData.balance || 0) < item.price) return sendJson(400, { success: false, error: 'رصيدك لا يكفي' });
-            if (userData.inventory && userData.inventory[itemId]) return sendJson(400, { success: false, error: 'أنت تملك هذا العنصر بالفعل' });
+            if (itemId !== 'bankextend' && itemId !== 'moneybag' && userData.inventory && userData.inventory[itemId]) return sendJson(400, { success: false, error: 'أنت تملك هذا العنصر بالفعل' });
             
             const removed = db.removeMoney(userId, item.price);
             if (!removed) return sendJson(400, { success: false, error: 'رصيدك لا يكفي' });
             
             db.addTransaction(userId, 'shop_buy_web', item.price, `Bought ${item.name} from Web`);
             
-            const inv = userData.inventory || {};
+            const freshUser = db.getUserData(userId);
+            const inv = freshUser.inventory || {};
             const now = Date.now();
-            
-            // Special items handling could go here, but for now we just add to inventory
-            if (itemId !== 'bankextend') {
-                inv[itemId] = { purchasedAt: now, expiresAt: item.duration === 999 ? null : now + (item.duration * 24 * 60 * 60 * 1000) };
-            } else {
-                db.updateFields(userId, { bankCap: (userData.bankCap || 0) + 50000 });
-            }
             
             if (itemId === 'moneybag') {
                 const cash = Math.floor(Math.random() * 5000) + 1000;
                 db.addMoney(userId, cash);
-                delete inv[itemId];
+                db.addTransaction(userId, 'moneybag_open', cash, 'Opened money bag');
+            } else if (itemId === 'bankextend') {
+                db.updateFields(userId, { bankCap: (freshUser.bankCap || 0) + 50000 });
+            } else {
+                inv[itemId] = { purchasedAt: now, expiresAt: item.duration === 999 ? null : now + (item.duration * 24 * 60 * 60 * 1000) };
+                if (itemId === 'shield') db.updateFields(userId, { robShieldUntil: now + 86400000 });
+                if (itemId === 'vip_badge') db.updateFields(userId, { vipBadge: true });
+                if (itemId === 'rob_immunity') db.updateFields(userId, { robImmunity: true });
+                if (itemId === 'xp_boost_large') db.updateFields(userId, { xpBoostUntil: now + (7 * 86400000) });
+                db.updateFields(userId, { inventory: inv });
             }
             
-            db.updateFields(userId, { inventory: inv });
             return sendJson(200, { success: true, newBalance: db.getUserData(userId).balance });
         }
 
         if (req.method === 'POST' && urlPath === '/api/store/sell') {
-            const body = await readBody();
+            const body = await getBody();
             const itemId = body.itemId;
             const item = config.shopItems[itemId];
             
@@ -794,24 +820,27 @@ const server = http.createServer(async (req, res) => {
                 if (now > auc.endsAt) {
                     // Process ended auction
                     if (auc.highestBidderId) {
-                        // Transfer item
-                        const buyerData = db.getUserData(auc.highestBidderId);
-                        const buyerInv = buyerData.inventory || {};
-                        buyerInv[auc.itemId] = { purchasedAt: now, expiresAt: config.shopItems[auc.itemId].duration === 999 ? null : now + (config.shopItems[auc.itemId].duration * 24 * 60 * 60 * 1000) };
-                        db.updateFields(auc.highestBidderId, { inventory: buyerInv });
-                        
-                        // Give money to seller
+                        const itemConf = config.shopItems[auc.itemId];
+                        if (itemConf) {
+                            const buyerData = db.getUserData(auc.highestBidderId);
+                            const buyerInv = { ...(buyerData.inventory || {}) };
+                            buyerInv[auc.itemId] = { purchasedAt: now, expiresAt: itemConf.duration === 999 ? null : now + (itemConf.duration * 24 * 60 * 60 * 1000) };
+                            db.updateFields(auc.highestBidderId, { inventory: buyerInv });
+                        }
                         db.addMoney(auc.sellerId, auc.highestBid);
                     } else {
-                        // Return item to seller
-                        const sellerData = db.getUserData(auc.sellerId);
-                        const sellerInv = sellerData.inventory || {};
-                        sellerInv[auc.itemId] = { purchasedAt: now, expiresAt: config.shopItems[auc.itemId].duration === 999 ? null : now + (config.shopItems[auc.itemId].duration * 24 * 60 * 60 * 1000) };
-                        db.updateFields(auc.sellerId, { inventory: sellerInv });
+                        // No bids — return item to seller
+                        const itemConf = config.shopItems[auc.itemId];
+                        if (itemConf) {
+                            const sellerData = db.getUserData(auc.sellerId);
+                            const sellerInv = { ...(sellerData.inventory || {}) };
+                            sellerInv[auc.itemId] = { purchasedAt: now, expiresAt: itemConf.duration === 999 ? null : now + (itemConf.duration * 24 * 60 * 60 * 1000) };
+                            db.updateFields(auc.sellerId, { inventory: sellerInv });
+                        }
                     }
                     activeAuctions.delete(id);
                 } else {
-                    active.push({ id, ...auc, itemDetails: config.shopItems[auc.itemId] });
+                    active.push({ id, ...auc, itemDetails: config.shopItems[auc.itemId] || null });
                 }
             }
             
@@ -824,7 +853,7 @@ const server = http.createServer(async (req, res) => {
         }
         
         if (req.method === 'POST' && urlPath === '/api/auction/start') {
-            const body = await readBody();
+            const body = await getBody();
             const itemId = body.itemId;
             const startingBid = Number(body.startingBid);
             
@@ -844,14 +873,14 @@ const server = http.createServer(async (req, res) => {
                 highestBid: startingBid,
                 highestBidderId: null,
                 highestBidderName: null,
-                endsAt: Date.now() + (1000 * 60 * 15) // 15 minutes auction
+                endsAt: Date.now() + (1000 * 60 * 15) // 15 minutes
             });
             
             return sendJson(200, { success: true });
         }
         
         if (req.method === 'POST' && urlPath === '/api/auction/bid') {
-            const body = await readBody();
+            const body = await getBody();
             const auctionId = body.auctionId;
             const bidAmount = Number(body.bidAmount);
             
@@ -870,7 +899,6 @@ const server = http.createServer(async (req, res) => {
                 db.addMoney(auc.highestBidderId, auc.highestBid);
             }
             
-            // Update auction state
             auc.highestBid = bidAmount;
             auc.highestBidderId = userId;
             auc.highestBidderName = session.username;
