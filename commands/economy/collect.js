@@ -20,10 +20,13 @@ module.exports = {
 
         const now = Date.now();
         const msPerDay = 86400000;
+        // FIX: إذا لم يكن lastCollect موجوداً، نستخدم lastInvestment كنقطة بداية
+        // لكن نحدد الأيام المعتبرة بـ 7 أيام كحد أقصى لأول مرة جمع (منع الاستغلال)
+        const isFirstCollect = !userData.lastCollect;
         const lastCollect = userData.lastCollect || userData.lastInvestment || now;
 
-        // حد أقصى لأيام الجمع (30 يوم) — منع تراكم الأرباح غير المحدود
-        const maxDays = config.investmentMaxDays || 30;
+        // حد أقصى لأيام الجمع (30 يوم عادي، 7 أيام لأول جمع)
+        const maxDays = isFirstCollect ? 7 : (config.investmentMaxDays || 30);
         const rawDays = Math.floor((now - lastCollect) / msPerDay);
         const daysPassed = Math.min(rawDays, maxDays);
 
@@ -40,11 +43,9 @@ module.exports = {
         // فحص: الربح لا يتجاوز قيمة الاستثمار الأصلية (أمان إضافي)
         const safeProfit = Math.min(profit, userData.investment * maxDays * rate);
 
-        db.updateFields(message.author.id, {
-            balance: (userData.balance || 0) + safeProfit,
-            lastCollect: now,
-        });
-        db.addTransaction(message.author.id, 'invest_profit', safeProfit, `Investment Profit: ${daysPassed} days`);
+        const actualAdded = db.addMoney(message.author.id, safeProfit);
+        db.updateFields(message.author.id, { lastCollect: now });
+        db.addTransaction(message.author.id, 'invest_profit', actualAdded, `Investment Profit: ${daysPassed} days`);
 
         // XP مناسب
         levels.addXP(message.author.id, Math.min(Math.floor(safeProfit / 100), 50), message);
@@ -53,7 +54,7 @@ module.exports = {
             .setColor('#00FF7F')
             .setTitle('💰 جمع أرباح الاستثمار!')
             .setDescription(
-                `✅ تم جمع **${safeProfit.toLocaleString()} ${config.currency}** من أرباح **${daysPassed}** يوم!` +
+                `✅ تم جمع **${actualAdded.toLocaleString()} ${config.currency}** من أرباح **${daysPassed}** يوم!` +
                 (rawDays > maxDays ? `\n⚠️ *تم تحديد الجمع بـ${maxDays} يوم كحد أقصى*` : '')
             )
             .addFields(
