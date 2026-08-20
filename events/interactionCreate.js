@@ -129,9 +129,13 @@ module.exports = {
                     const colorRolesFixed = require('../commands/moderation/color-roles');
                     await colorRolesFixed.assignColorRole(interaction, colorName);
                 }
-                // ✅ Server Setup confirm/cancel
+                // ✅ Server Setup confirm/cancel — collector in server-setup.js handles logic
+                // We must deferUpdate() to prevent Discord's "This interaction failed" error
                 else if (id === 'setup_confirm' || id === 'setup_cancel') {
-                    // Handled by the collector inside server-setup.js
+                    // Don't defer — the awaitMessageComponent collector inside server-setup.js
+                    // will call response.update() which counts as acknowledging the interaction.
+                    // If somehow not caught (race condition), silently ignore.
+                    // Do nothing here — the collector handles it.
                 }
                 // 🤖 Bot guide buttons
                 else if (id.startsWith('bot_guide_')) {
