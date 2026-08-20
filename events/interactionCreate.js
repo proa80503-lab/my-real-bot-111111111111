@@ -141,7 +141,7 @@ module.exports = {
                         'bot_guide_rooms': '🏠 **الغرف:** `غرفة جديدة [اسم] [لعبة]` `غرف` `غرفتي` `حذف غرفة`',
                         'bot_guide_ai': '🧠 **الذكاء الاصطناعي:** منشن البوت في أي رسالة وسيرد عليك فوراً! يتذكر محادثاتك ويتعلم منها.',
                     };
-                    await interaction.reply({ content: guides[id] || '❓ غير معروف', flags: MessageFlags.Ephemeral });
+                    await interaction.reply({ content: guides[id] || '❓ غير معروف', ephemeral: true });
                 }
                 // ❌⭕ Tic-Tac-Toe (v3 — bot, pvp, accept, decline, move)
                 else if (id.startsWith('ttt_')) {
@@ -266,9 +266,9 @@ module.exports = {
                     const clanId = id.replace('clan_rename_', '');
                     await clans.handleRenameButton(interaction, clanId);
                 } else if (id.startsWith('clan_settings_')) {
-                    await interaction.reply({ content: '🛠️ إعدادات الكلان (قريباً)...', flags: MessageFlags.Ephemeral });
+                    await interaction.reply({ content: '🛠️ إعدادات الكلان (قريباً)...', ephemeral: true });
                 } else if (id.startsWith('clan_members_')) {
-                    await interaction.reply({ content: '👥 قائمة الأعضاء — استخدم أمر `كلان` لرؤيتها.', flags: MessageFlags.Ephemeral });
+                    await interaction.reply({ content: '👥 قائمة الأعضاء — استخدم أمر `كلان` لرؤيتها.', ephemeral: true });
                 } else if (id === 'clan_edit_rank_btn') {
                     await clans.handleEditRankButton(interaction);
                 } else if (id.startsWith('clan:')) {
@@ -306,7 +306,7 @@ module.exports = {
                     if (!interaction.replied && !interaction.deferred) {
                         await interaction.reply({
                             content: '⌛ انتهت مدة هذه الجلسة. اكتب `بروفايل` من جديد لعرض ملفك الشخصي.',
-                            flags: MessageFlags.Ephemeral
+                            ephemeral: true
                         }).catch(() => {});
                     }
                 }
@@ -363,7 +363,7 @@ module.exports = {
                         if (!interaction.replied && !interaction.deferred) {
                             await interaction.reply({
                                 content: '⌛ انتهت مدة هذه الجلسة. اكتب الأمر من جديد.',
-                                flags: MessageFlags.Ephemeral
+                                ephemeral: true
                             }).catch(() => {});
                         }
                     }
@@ -380,7 +380,7 @@ module.exports = {
                     if (!interaction.replied && !interaction.deferred) {
                         await interaction.reply({
                             content: '⚙️ هذا الزر لا يعمل في الوقت الحالي.',
-                            flags: MessageFlags.Ephemeral
+                            ephemeral: true
                         }).catch(() => {});
                     }
                 }
@@ -395,7 +395,7 @@ module.exports = {
                 try {
                     await interaction.reply({
                         content: `❌ حدث خطأ غير متوقع. حاول مرة أخرى.`,
-                        flags: MessageFlags.Ephemeral
+                        ephemeral: true
                     });
                 } catch (e) { /* Already replied or expired */ }
             }
