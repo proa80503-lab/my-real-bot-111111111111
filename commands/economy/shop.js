@@ -29,7 +29,8 @@ const CATEGORIES = {
 // ─────────────────────────────────────────────
 // بناء رسالة القائمة الرئيسية للفئات
 // ─────────────────────────────────────────────
-function buildMainShop(user) {
+// ── إرسال رابط المتجر بالخاص (DM) فقط ──────────────────────────────────────
+async function sendShopDM(user, message) {
     const userData = db.getUserData(user.id);
     const balance = userData.balance || 0;
     const bank = userData.bank || 0;
@@ -39,22 +40,55 @@ function buildMainShop(user) {
 
     const embed = new EmbedBuilder()
         .setColor('#2C3E50')
-        .setTitle('🛒 متجر الخوادم الفاخر (الويب)')
-        .setDescription('مرحباً بك في المتجر المطور! لقد تم نقل المتجر إلى واجهة ويب ديناميكية وتفاعلية.\n\nاضغط على الزر أدناه للدخول إلى متجرك الخاص.')
-        .addFields({
-            name: '💰 رصيدك الحالي',
-            value: `المحفظة: **${balance.toLocaleString()}** | البنك: **${bank.toLocaleString()}** ${config.currency}`,
-            inline: false
-        })
-        .setImage('https://images.unsplash.com/photo-1555529771-835f59fc5efe?q=80&w=800') // صورة ترحيبية للمتجر
-        .setFooter({ text: 'هذا الرابط خاص بك وينتهي بعد ساعتين.' })
+        .setTitle('🛒 متجرك الخاص')
+        .setDescription('مرحباً! تم إرسال رابط متجرك الشخصي بالخاص لحمايتك.\n\nاضغط على الزر للدخول.')
+        .addFields(
+            {
+                name: '💰 رصيدك الحالي',
+                value: `المحفظة: **${balance.toLocaleString()}** | البنك: **${bank.toLocaleString()}** ${config.currency}`,
+                inline: false
+            },
+            {
+                name: '🔒 ملاحظة أمنية',
+                value: 'هذا الرابط **خاص بك فقط** — لا تشاركه مع أحد!\nينتهي خلال **30 دقيقة**.',
+                inline: false
+            }
+        )
+        .setImage('https://images.unsplash.com/photo-1555529771-835f59fc5efe?q=80&w=800')
+        .setFooter({ text: '⏱️ ينتهي الرابط بعد 30 دقيقة' })
         .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setLabel('🌐 الدخول للمتجر').setStyle(ButtonStyle.Link).setURL(storeUrl)
+        new ButtonBuilder().setLabel('🌐 فتح متجري').setStyle(ButtonStyle.Link).setURL(storeUrl)
     );
 
-    return { embeds: [embed], components: [row] };
+    try {
+        await user.send({ embeds: [embed], components: [row] });
+        return true;
+    } catch {
+        // المستخدم أغلق الـ DMs
+        return false;
+    }
+}
+
+function buildMainShop(user) {
+    // نبقي هذه الدالة للاستخدام الداخلي (أزرار shop_main)
+    const userData = db.getUserData(user.id);
+    const balance = userData.balance || 0;
+    const bank = userData.bank || 0;
+
+    const embed = new EmbedBuilder()
+        .setColor('#2C3E50')
+        .setTitle('🛒 متجر الخوادم الفاخر')
+        .setDescription('اختر فئة من الأزرار للتسوق، أو اكتب `متجر` للحصول على رابط متجرك الشخصي.')
+        .addFields({
+            name: '💰 رصيدك',
+            value: `المحفظة: **${balance.toLocaleString()}** | البنك: **${bank.toLocaleString()}** ${config.currency}`,
+            inline: false
+        })
+        .setTimestamp();
+
+    return { embeds: [embed], components: [] };
 }
 
 // ─────────────────────────────────────────────
@@ -206,10 +240,14 @@ async function buy(interaction, itemId) {
     }
 
     if (itemId === 'moneybag') {
-        const cash = Math.floor(Math.random() * 5000) + 1000;
+        // FIX: كيس المال يعطي مبلغاً عشوائياً بين 200-3500 (السعر 1000)
+        // المستخدم لا يكسب دائماً — احتمال الخسارة موجود
+        const cash = Math.floor(Math.random() * 3300) + 200;
         db.addMoney(userId, cash);
-        delete updates.inventory[itemId]; // الكيس يُستخدم فوراً ولا يبقى في الحقيبة
-        resultMsg = `💰 قمت بفتح كيس المال وحصلت على **${cash.toLocaleString()}** ${config.currency}!`;
+        delete updates.inventory[itemId];
+        const diff = cash - item.price;
+        const diffStr = diff >= 0 ? `+${diff.toLocaleString()}` : diff.toLocaleString();
+        resultMsg = `💰 فتحت كيس المال وحصلت على **${cash.toLocaleString()}** ${config.currency}! (${diffStr})`;
     }
 
     db.updateFields(userId, updates);
@@ -316,11 +354,21 @@ module.exports = {
     async execute(message) {
         try {
             const user = message.author;
-            const msg = buildMainShop(user);
-            await message.reply({ ...msg });
+            // إرسال الرابط بالخاص (DM) لحماية حساب المستخدم
+            const sent = await sendShopDM(user, message);
+            if (sent) {
+                await message.reply('📬 تم إرسال رابط متجرك **بالخاص** لحماية حسابك! تحقق من رسائلك الخاصة.').catch(() => {});
+            } else {
+                // المستخدم أغلق الـ DMs — نرسل في الروم مع تحذير
+                const msg = buildMainShop(user);
+                await message.reply({
+                    content: '⚠️ **لم أتمكن من إرسال الرابط بالخاص** (ربما أغلقت الرسائل الخاصة).\n🔒 هذا الرابط خاص بك — لا تشاركه!',
+                    ...msg
+                });
+            }
         } catch (err) {
             console.error('[Shop Error]', err);
-            message.reply('حدث خطأ أثناء فتح المتجر.').catch(()=>{});
+            message.reply('حدث خطأ أثناء فتح المتجر.').catch(() => {});
         }
     },
     handleShopButton // تم تعديله ليتوافق مع interactionCreate.js
