@@ -4,16 +4,23 @@ const fs   = require('fs');
 const path = require('path');
 
 const dbPath  = path.join(__dirname, '../data/economy.json');
-const tmpPath = dbPath + '.tmp';   // الكتابة أولاً هنا
-const bakPath = dbPath + '.bak';   // آخر نسخة سليمة
+const tmpPath = dbPath + '.tmp';
+const bakPath = dbPath + '.bak';
+
+// ─── حدود مركزية — جميع الأكواد تخضع لها تلقائياً ───────────────────────────
+const LIMITS = {
+    MAX_WALLET: 5_000_000,   // أقصى رصيد في المحفظة
+    MAX_BANK:   10_000_000,  // أقصى رصيد في البنك (قبل التوسعة)
+    MAX_INVESTMENT: 1_000_000,
+};
+module.exports.LIMITS = LIMITS;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Cache ذكي — يقلل عمليات I/O من مئات إلى بضع دورات في الدقيقة
+// Cache ذكي — يقلل عمليات I/O
 // ─────────────────────────────────────────────────────────────────────────────
-let _cache = null;   // البيانات الكاملة في الذاكرة
-let _dirty = false;  // هل هناك تغييرات غير محفوظة؟
+let _cache = null;
+let _dirty = false;
 
-// قراءة الملف مرة واحدة عند أول طلب
 function _ensureCache() {
     if (_cache) return;
     try {
@@ -22,7 +29,6 @@ function _ensureCache() {
             _cache = JSON.parse(raw);
         }
     } catch (e) {
-        // محاولة استعادة النسخة الاحتياطية عند تلف الملف الرئيسي
         console.error('[DB] ⚠️ تعذّر قراءة قاعدة البيانات — محاولة استعادة النسخة الاحتياطية...', e.message);
         try {
             if (fs.existsSync(bakPath)) {
@@ -39,27 +45,17 @@ function _ensureCache() {
     if (!_cache.guilds) _cache.guilds = {};
 }
 
-// ─── حفظ atomic — يكتب على ملف مؤقت ثم يُعيد تسميته ─────────────────────────
+// ─── حفظ atomic ───────────────────────────────────────────────────────────────
 function _flush() {
     if (!_dirty || !_cache) return;
     try {
         const data = JSON.stringify(_cache, null, 2);
-
-        // 1. كتابة الملف المؤقت
         fs.writeFileSync(tmpPath, data, 'utf8');
-
-        // 2. نسخ الملف الحالي كـ backup (صامت إذا لم يكن موجوداً)
-        if (fs.existsSync(dbPath)) {
-            fs.copyFileSync(dbPath, bakPath);
-        }
-
-        // 3. الاستبدال الآمن (atomic على أغلب الأنظمة)
+        if (fs.existsSync(dbPath)) fs.copyFileSync(dbPath, bakPath);
         fs.renameSync(tmpPath, dbPath);
-
         _dirty = false;
     } catch (e) {
         console.error('[DB] ❌ خطأ في حفظ قاعدة البيانات:', e.message);
-        // محاولة حفظ مباشر كخطة بديلة
         try {
             fs.writeFileSync(dbPath, JSON.stringify(_cache, null, 2), 'utf8');
             _dirty = false;
@@ -69,11 +65,9 @@ function _flush() {
     }
 }
 
-// ─── حفظ دوري كل 30 ثانية ────────────────────────────────────────────────────
 const _saveInterval = setInterval(_flush, 30_000);
 _saveInterval.unref?.();
 
-// ─── حفظ عند إغلاق البوت ─────────────────────────────────────────────────────
 function saveAll() { _flush(); }
 process.on('SIGINT',  () => { saveAll(); process.exit(0); });
 process.on('SIGTERM', () => { saveAll(); process.exit(0); });
@@ -134,7 +128,7 @@ function getUserData(userId) {
 
     const u = _cache.users[userId];
 
-    // ── ترقية صامتة للبيانات القديمة ──────────────────────────────────────
+    // ── ترقية صامتة للبيانات القديمة ─────────────────────────────────────────
     if (u.xp           === undefined) { u.xp           = 0;    _dirty = true; }
     if (!u.level)                     { u.level         = 1;    _dirty = true; }
     if (!u.achievements)              { u.achievements  = [];   _dirty = true; }
@@ -156,7 +150,7 @@ function getUserData(userId) {
         delete u.marriageDate;
         _dirty = true;
     }
-    if (u.marriedTo   === undefined) { u.marriedTo   = null; _dirty = true; }
+    if (u.marriedTo    === undefined) { u.marriedTo    = null; _dirty = true; }
     if (u.marriedSince === undefined) { u.marriedSince = null; _dirty = true; }
 
     // إصلاح inventory array قديم → object
@@ -185,7 +179,7 @@ function updateUserData(userId, data) {
     return _cache.users[userId];
 }
 
-// ─── تحديث حقول محددة فقط (أكثر أماناً — لا يُضيّع حقولاً أخرى) ─────────────
+// ─── تحديث حقول محددة فقط ────────────────────────────────────────────────────
 function updateFields(userId, fields) {
     _ensureCache();
     if (!_cache.users[userId]) getUserData(userId);
@@ -196,16 +190,22 @@ function updateFields(userId, fields) {
     return _cache.users[userId];
 }
 
-// ─── إضافة أموال ─────────────────────────────────────────────────────────────
+// ─── إضافة أموال للمحفظة (مع تطبيق الحد الأقصى تلقائياً) ─────────────────────
+// يُعيد المبلغ الفعلي الذي تمت إضافته (قد يكون أقل بسبب الحد)
 function addMoney(userId, amount) {
     _ensureCache();
     if (!_cache.users[userId]) getUserData(userId);
-    _cache.users[userId].balance = (_cache.users[userId].balance || 0) + Math.abs(amount);
+    const u = _cache.users[userId];
+    const maxWallet = LIMITS.MAX_WALLET;
+    const current = u.balance || 0;
+    // تطبيق الحد الأقصى مركزياً
+    const actualAdd = Math.max(0, Math.min(Math.abs(amount), maxWallet - current));
+    u.balance = current + actualAdd;
     _dirty = true;
-    return _cache.users[userId];
+    return actualAdd; // يُعيد المبلغ الفعلي المُضاف
 }
 
-// ─── خصم أموال (يعيد false إن لم يكفِ الرصيد) ────────────────────────────────
+// ─── خصم أموال من المحفظة (يعيد false إن لم يكفِ الرصيد) ─────────────────────
 function removeMoney(userId, amount) {
     _ensureCache();
     if (!_cache.users[userId]) getUserData(userId);
@@ -215,14 +215,44 @@ function removeMoney(userId, amount) {
     return true;
 }
 
-// ─── تحويل أموال بين مستخدمين ─────────────────────────────────────────────────
+// ─── إضافة أموال للبنك (مع تطبيق الحد الأقصى للبنك) ──────────────────────────
+// يُعيد المبلغ الفعلي المُودَع، أو false إن كان البنك ممتلئاً
+function addMoneyToBank(userId, amount) {
+    _ensureCache();
+    if (!_cache.users[userId]) getUserData(userId);
+    const u = _cache.users[userId];
+    const maxBank = Math.max(LIMITS.MAX_BANK, (u.bankCap || 0));
+    const current = u.bank || 0;
+    if (current >= maxBank) return 0;
+    const actualDeposit = Math.min(Math.abs(amount), maxBank - current);
+    u.bank = current + actualDeposit;
+    _dirty = true;
+    return actualDeposit;
+}
+
+// ─── خصم أموال من البنك (يعيد false إن لم يكفِ الرصيد) ───────────────────────
+function removeMoneyFromBank(userId, amount) {
+    _ensureCache();
+    if (!_cache.users[userId]) getUserData(userId);
+    if ((_cache.users[userId].bank || 0) < amount) return false;
+    _cache.users[userId].bank -= amount;
+    _dirty = true;
+    return true;
+}
+
+// ─── تحويل أموال بين مستخدمين (من محفظة لمحفظة) ─────────────────────────────
 function transferMoney(fromId, toId, amount) {
     _ensureCache();
     const from = getUserData(fromId);
     if ((from.balance || 0) < amount) return false;
     _cache.users[fromId].balance -= amount;
     if (!_cache.users[toId]) getUserData(toId);
-    _cache.users[toId].balance = (_cache.users[toId].balance || 0) + amount;
+    // نستخدم addMoney للتحقق من الحد عند المستلم
+    const added = addMoney(toId, amount);
+    // إذا لم يُضف بالكامل، نُعيد الفرق للمُرسل
+    if (added < amount) {
+        _cache.users[fromId].balance += (amount - added);
+    }
     _dirty = true;
     return true;
 }
@@ -237,7 +267,6 @@ function addTransaction(userId, type, amount, description) {
         type, amount, description, timestamp: Date.now(),
     });
 
-    // احتفظ بآخر 25 فقط
     if (_cache.users[userId].transactions.length > 25) {
         _cache.users[userId].transactions.length = 25;
     }
@@ -273,7 +302,6 @@ function updateGuildData(guildId, data) {
     return _cache.guilds[guildId];
 }
 
-// ─── قراءة كل المستخدمين ─────────────────────────────────────────────────────
 function getAllUsers() {
     _ensureCache();
     return _cache.users;
@@ -288,9 +316,12 @@ module.exports = {
     updateFields,
     addMoney,
     removeMoney,
+    addMoneyToBank,
+    removeMoneyFromBank,
     transferMoney,
     addTransaction,
     getGuildData,
     updateGuildData,
     getAllUsers,
+    LIMITS,
 };
