@@ -60,6 +60,12 @@ const SERVER_SETUP_TRIGGERS = [
     'تفعيل سيرفر', 'تفعيل-سيرفر', 'اعادة تفعيل سيرفر', 'setup-server', 'reset-server', 'بناء-سيرفر'
 ];
 
+
+// أمر إعادة التفعيل المستقل (حذف القنوات + إعادة بناء كامل)
+const RESET_TRIGGERS = [
+    'اعادة تفعيل', 'إعادة تفعيل', 'reset'
+];
+
 // أوامر الكلانات — محمية من التعارض
 // حذف كلانات / حذف كلان — تعالج قبل CLAN_TRIGGERS لتجنب التعارض
 const NUKE_CLAN_TRIGGERS = [
@@ -235,6 +241,22 @@ module.exports = {
             } catch (e) {
                 console.error('[Setup] خطأ:', e.message);
                 message.reply('❌ حدث خطأ في إعداد الرتب: ' + e.message).catch(() => {});
+            }
+            return;
+        }
+
+        // ── إعادة تفعيل (حذف جميع القنوات + بناء من الصفر)
+        if (RESET_TRIGGERS.some(t => lowMsg === t)) {
+            try {
+                const serverSetup = require('../commands/moderation/server-setup');
+                // Force isReset = true by patching message content temporarily
+                const origContent = message.content;
+                message.content = 'اعادة تفعيل سيرفر'; // triggers isReset detection
+                await serverSetup.execute(message, []);
+                message.content = origContent;
+            } catch (e) {
+                console.error('[ResetServer] خطأ:', e.message);
+                message.reply('❌ حدث خطأ في إعادة التفعيل: ' + e.message).catch(() => {});
             }
             return;
         }
