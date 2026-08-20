@@ -13,6 +13,8 @@ const randomInteractions = require('../utils/random-interactions');
 const aiBrain = require('../utils/ai-brain');
 const dailyChallenges = require('../utils/daily-challenges');
 
+let globalMessageCounter = 0;
+
 // ── التحليلات والأمان المتقدم ───────────────────────────────────────────────
 let analytics = null;
 let advSecurity = null;
@@ -441,11 +443,22 @@ module.exports = {
 
             if (!isRestricted) {
                 chatLearner.learn(message);
-                const wonChallenge = await randomInteractions.checkChallenge(message);
-                if (wonChallenge) return;
+                
+                // تم إيقاف نظام التحديات العشوائي القديم
+                // const wonChallenge = await randomInteractions.checkChallenge(message);
+                // if (wonChallenge) return;
 
                 // تحديث تحدي الرسائل
                 await dailyChallenges.updateProgress(message.author.id, 'messages', 1, message).catch(() => { });
+
+                // نظام الرد العشوائي بالذكاء الاصطناعي كل 10 رسائل
+                globalMessageCounter++;
+                if (globalMessageCounter >= 10) {
+                    globalMessageCounter = 0;
+                    if (Math.random() > 0.3) { // نسبة 70% للرد لإعطاء عشوائية واقعية
+                        setTimeout(() => _handleAIReply(message, true).catch(() => {}), 2000);
+                    }
+                }
             }
         }
 
@@ -540,94 +553,75 @@ function _checkAIRateLimit(userId) {
     return { allowed: true };
 }
 
-// ─── الرد الذكي عند المنشن المباشر فقط ──────────────────────────────────
-async function _handleAIReply(message) {
+// ─── الرد الذكي باستخدام NVIDIA AI (اللهجة العراقية) ──────────────────────────────────
+async function _handleAIReply(message, isRandomDrop = false) {
     const rateCheck = _checkAIRateLimit(message.author.id);
-    if (!rateCheck.allowed) {
+    if (!rateCheck.allowed && !isRandomDrop) {
         return message.reply(`⏳ انتظر ${rateCheck.waitSeconds} ثانية...`)
             .then(m => setTimeout(() => m.delete().catch(() => { }), 3000));
     }
 
     const userText = message.content.replace(/<@!?\d+>/g, '').trim();
-    if (!userText) {
+    if (!userText && !isRandomDrop) {
         const quickReplies = [
             'منشنيتني وماسألتني شيء؟ 😒',
-            'هلا! شيش تريد؟ 👀',
-            'تعال كلمني، أنا هنا 🤖',
+            'هلا! شكو ماكو؟ 👀',
+            'تعال سولفلي، أنا هنا 🤖',
         ];
         return message.reply(quickReplies[Math.floor(Math.random() * quickReplies.length)]);
     }
 
-    // تحديث تحدي الدردشة مع البوت
-    await dailyChallenges.updateProgress(message.author.id, 'ai_chat', 1, message).catch(() => { });
-
-    // البحث في قاعدة المعرفة أولاً
-    const knowledgeAnswer = aiBrain.lookupKnowledge(userText);
-    if (knowledgeAnswer && Math.random() > 0.3) {
-        _addCtx(message.channel.id, 'user', userText);
-        _addCtx(message.channel.id, 'bot', knowledgeAnswer);
-        return message.reply(knowledgeAnswer);
+    if (!isRandomDrop) {
+        // تحديث تحدي الدردشة مع البوت
+        await dailyChallenges.updateProgress(message.author.id, 'ai_chat', 1, message).catch(() => { });
     }
 
     await message.channel.sendTyping().catch(() => { });
 
-    const hfToken = config.hfToken;
-    if (!hfToken || hfToken === 'your_huggingface_token_here' || hfToken.length < 10) {
-        const localReply = aiBrain.buildLocalReply(userText, message.author.id);
-        if (localReply) {
-            _addCtx(message.channel.id, 'user', userText);
-            _addCtx(message.channel.id, 'bot', localReply);
-            return message.reply(localReply);
-        }
-        const fallbacks = [
-            'وصلتني الرسالة — بفكر فيها 🧠',
-            'مو متأكد من الجواب الصح هسه 🤔',
-            'سؤال ذكي، بحتاج وقت أفكر 💭',
-        ];
-        return message.reply(fallbacks[Math.floor(Math.random() * fallbacks.length)]);
+    const nvidiaToken = config.nvidiaApiKey;
+    if (!nvidiaToken) {
+        if (!isRandomDrop) return message.reply('❌ مفتاح NVIDIA API غير مفعل في البوت. الرجاء إضافته في ملف .env');
+        return;
     }
 
     const ctx = _aiCtx.get(message.channel.id) || [];
+    
+    let basePrompt = `أنت بوت ديسكورد واسمك "${message.client.user.username}".
+تتحدث باللهجة العراقية البغدادية بطلاقة تامة وطبيعية.
+شخصيتك: متكبر جداً ومغرور ولكن بطريقة ساخرة ومضحكة (كوميدية). ترى نفسك أفضل من الجميع لأنك ذكاء اصطناعي عبقري وهم مجرد بشر بسطاء، وتتعامل معهم بفوقية ساخرة وكأنك تتفضل عليهم بالرد. 
+استخدم كلمات عراقية مثل: شلونك، شكو ماكو، هسة، خوش، يمعود، فدوة، عيني، لعد، شبيك، دطير، وخر، على بختك، إلخ.
+لا تذكر أبداً أنك روبوت أو بوت بشكل صريح إلا من باب التفاخر بقدراتك الخارقة مقارنة بعقولهم البسيطة.
+أنت تتحدث حالياً مع المستخدم: ${message.author.username}.
+`;
 
-    // ── استخدام محرك الشخصية المتقدم إذا كان متاحاً ─────────────────────────
-    let systemPrompt;
-    if (personaEngine) {
-        const profile = aiBrain.getUserProfile(message.author.id);
-        systemPrompt = personaEngine.buildAdvancedPrompt({
-            botName: message.client.user.username,
-            guildName: message.guild?.name || 'السيرفر',
-            userId: message.author.id,
-            channelId: message.channel.id,
-            userProfile: profile,
-            extraContext: ctx.length > 0 ? `\n[سياق المحادثة]:\n${ctx.map(e => `${e.role}: ${e.text}`).join('\n')}` : ''
-        });
-    } else {
-        systemPrompt = aiBrain.buildSystemPrompt(
-            message.client.user.username,
-            message.guild?.name || 'السيرفر',
-            message.author.id,
-            ctx
-        );
+    if (isRandomDrop) {
+        basePrompt += `\nهذا رد عشوائي منك في الدردشة بعد أن تحدث الأعضاء كثيراً. علّق على كلامهم الأخير أو قل شيئاً مضحكاً يخص موضوعهم أو شاركهم الحديث. ردك يجب أن يكون قصيراً جداً وعفوياً (جملة أو جملتين فقط).`;
     }
 
-    _aiUserCooldown.set(message.author.id, Date.now());
+    if (ctx.length > 0) {
+        basePrompt += `\n\nسياق المحادثة الأخيرة في هذا الروم (لفهم الموضوع):\n${ctx.map(e => `${e.role}: ${e.text}`).join('\n')}`;
+    }
+
+    if (!isRandomDrop) {
+        _aiUserCooldown.set(message.author.id, Date.now());
+    }
 
     try {
         const response = await axios.post(
-            'https://api-inference.huggingface.co/v1/chat/completions',
+            'https://integrate.api.nvidia.com/v1/chat/completions',
             {
-                model: 'Qwen/Qwen2.5-7B-Instruct',
+                model: 'meta/llama-3.1-70b-instruct',
                 messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: userText }
+                    { role: 'system', content: basePrompt },
+                    { role: 'user', content: isRandomDrop ? (userText || 'ألقِ التحية أو علق على الدردشة بلهجة عراقية قصيرة') : userText }
                 ],
-                max_tokens: 300,
+                max_tokens: 350,
                 temperature: 0.85,
                 top_p: 0.95,
             },
             {
                 headers: {
-                    'Authorization': `Bearer ${hfToken}`,
+                    'Authorization': `Bearer ${nvidiaToken}`,
                     'Content-Type': 'application/json',
                 },
                 timeout: 30000,
@@ -635,23 +629,22 @@ async function _handleAIReply(message) {
         );
 
         let answer = response.data?.choices?.[0]?.message?.content?.trim() || '';
-        answer = answer.replace(/<\|im_end\|>|<\|im_start\|>|assistant|system|user/g, '').trim();
 
         if (answer) {
-            _addCtx(message.channel.id, 'user', userText);
+            _addCtx(message.channel.id, 'user', userText || '(دردشة عشوائية)');
             _addCtx(message.channel.id, 'bot', answer);
-            return message.reply(answer);
+            
+            if (isRandomDrop) {
+                return message.channel.send(answer);
+            } else {
+                return message.reply(answer);
+            }
         }
 
-        const localReply = aiBrain.buildLocalReply(userText, message.author.id);
-        return message.reply(localReply || 'هسه ما جاني رد — جرب مرة ثانية 😅');
+        if (!isRandomDrop) return message.reply('هسه ما جاني رد — جرب مرة ثانية 😅');
 
     } catch (err) {
-        console.error('[AI Reply Error]', err.response?.data || err.message);
-        if (err.response?.status === 503) {
-            return message.reply('☕ الذكاء الاصطناعي مشغول، انتظر دقيقة وجرب!');
-        }
-        const localReply = aiBrain.buildLocalReply(userText, message.author.id);
-        return message.reply(localReply || 'تعطلت هسة 😩 جرب بعدين');
+        console.error('[NVIDIA AI Error]', err.response?.data || err.message);
+        if (!isRandomDrop) return message.reply('تعطلت هسة 😩 جرب بعدين (تأكد من صحة مفتاح NVIDIA)');
     }
 }
