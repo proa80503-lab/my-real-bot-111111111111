@@ -798,10 +798,15 @@ async function buildServer(guild, progressMsg, isReset = false) {
         }).catch(() => null);
     }
 
-    let jailRole = guild.roles.cache.find(r => r.name === config.jailRoleName);
+    // رتبة السجن
+    const jailRoleName = config.jailRoleName || '🔒┃سجين';
+    let jailRole = guild.roles.cache.find(r =>
+        r.name === jailRoleName || r.name === config.jailRoleName ||
+        r.name.toLowerCase().includes('سجين') || r.name.toLowerCase().includes('jail')
+    );
     if (!jailRole) {
         jailRole = await guild.roles.create({
-            name: config.jailRoleName,
+            name: jailRoleName,
             color: '#000000',
             reason: '⚙️ إعداد السيرفر التلقائي - رتبة السجن',
         }).catch(() => null);
@@ -809,6 +814,24 @@ async function buildServer(guild, progressMsg, isReset = false) {
     if (jailRole) {
         guildData.jailRole = jailRole.id;
     }
+
+    // رتبة الكتم
+    const muteRoleName = config.muteRoleName || '🔇┃مكتوم';
+    let muteRole = guild.roles.cache.find(r =>
+        r.name === muteRoleName || r.name === config.muteRoleName ||
+        r.name.toLowerCase().includes('مكتوم') || r.name.toLowerCase().includes('muted')
+    );
+    if (!muteRole) {
+        muteRole = await guild.roles.create({
+            name: muteRoleName,
+            color: '#808080',
+            reason: '⚙️ إعداد السيرفر التلقائي - رتبة الكتم',
+        }).catch(() => null);
+    }
+    if (muteRole) {
+        guildData.muteRole = muteRole.id;
+    }
+
 
     const everyoneRole = guild.roles.everyone;
     const totalCats = structure.categories.length;
