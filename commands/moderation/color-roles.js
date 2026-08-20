@@ -142,6 +142,11 @@ async function handleColorButton(interaction) {
 
 // دالة إسناد اللون وتخليق الرتبة ديناميكياً إذا اختفت
 async function assignColorRole(interaction, identifier) {
+    // التأجيل الفوري لتفادي خطأ "لم يستجب البوت في الوقت المحدد"
+    if (!interaction.deferred && !interaction.replied) {
+        await interaction.deferReply({ ephemeral: true }).catch(() => {});
+    }
+
     // البحث عن اللون بالاسم الإنجليزي أو العربي
     let color = COLORS[identifier];
     if (!color) {
@@ -149,7 +154,7 @@ async function assignColorRole(interaction, identifier) {
     }
 
     if (!color) {
-        return interaction.reply({ content: '❌ لون غير معروف!', flags: MessageFlags.Ephemeral });
+        return interaction.editReply({ content: '❌ لون غير معروف!' });
     }
 
     try {
@@ -167,9 +172,8 @@ async function assignColorRole(interaction, identifier) {
                     reason: 'Dynamic color role creation'
                 });
             } catch (err) {
-                return interaction.reply({
-                    content: '❌ هذا اللون غير متاح ولم يتمكن البوت من إنشائه تلقائياً. تأكد من أن البوت لديه صلاحية إدارة الرتب.',
-                    flags: MessageFlags.Ephemeral
+                return interaction.editReply({
+                    content: '❌ هذا اللون غير متاح ولم يتمكن البوت من إنشائه تلقائياً. تأكد من أن البوت لديه صلاحية إدارة الرتب.'
                 });
             }
         }
@@ -190,13 +194,12 @@ async function assignColorRole(interaction, identifier) {
             .setFooter({ text: 'يمكنك تغيير اللون في أي وقت!' })
             .setTimestamp();
 
-        await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+        await interaction.editReply({ embeds: [embed] });
 
     } catch (error) {
         console.error('خطأ في إسناد اللون:', error);
-        await interaction.reply({
-            content: '❌ حدث خطأ! تأكد من أن رتبة البوت فوق رتب الألوان في قائمة الرتب ولديه صلاحية إدارة الرتب.',
-            flags: MessageFlags.Ephemeral
+        await interaction.editReply({
+            content: '❌ حدث خطأ! تأكد من أن رتبة البوت فوق رتب الألوان في قائمة الرتب ولديه صلاحية إدارة الرتب.'
         });
     }
 }
