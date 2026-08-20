@@ -207,33 +207,33 @@
                 // Let's assume we can't reliably know here unless we add it, so let's just let the API handle the "can't bid on own" error.
                 const nextBid = auc.highestBid + Math.ceil(auc.highestBid * 0.05); // +5% minimum
 
-                grid.innerHTML += \`
+                grid.innerHTML += `
                     <div class="auc-card">
-                        <div class="time-badge \${urgentClass}">⏳ \${timeRem}</div>
-                        <img class="auc-img" src="\${item.image || 'https://via.placeholder.com/400x200?text=No+Image'}" alt="\${item.name}">
+                        <div class="time-badge ${urgentClass}">⏳ ${timeRem}</div>
+                        <img class="auc-img" src="${item.image || 'https://via.placeholder.com/400x200?text=No+Image'}" alt="${item.name}">
                         <div class="auc-body">
-                            <div class="auc-title"><span>\${item.emoji} \${item.name}</span></div>
+                            <div class="auc-title"><span>${item.emoji} ${item.name}</span></div>
                             
                             <div class="auc-info-row">
                                 <span class="auc-label">البائع:</span>
-                                <span class="auc-val">\${auc.sellerName}</span>
+                                <span class="auc-val">${auc.sellerName}</span>
                             </div>
                             <div class="auc-info-row">
                                 <span class="auc-label">أعلى مزايد:</span>
-                                <span class="auc-val">\${auc.highestBidderName || 'لا يوجد'}</span>
+                                <span class="auc-val">${auc.highestBidderName || 'لا يوجد'}</span>
                             </div>
                             <div class="auc-info-row">
                                 <span class="auc-label">أعلى سعر:</span>
-                                <span class="auc-val price">\${auc.highestBid.toLocaleString()} 💰</span>
+                                <span class="auc-val price">${auc.highestBid.toLocaleString()} 💰</span>
                             </div>
                             
                             <div class="bid-controls">
-                                <input type="number" id="bid-val-\${auc.id}" class="bid-input" value="\${nextBid}" min="\${nextBid}">
-                                <button class="btn btn-bid" onclick="placeBid('\${auc.id}')">زايد 💸</button>
+                                <input type="number" id="bid-val-${auc.id}" class="bid-input" value="${nextBid}" min="${nextBid}">
+                                <button class="btn btn-bid" onclick="placeBid('${auc.id}')">زايد 💸</button>
                             </div>
                         </div>
                     </div>
-                \`;
+                `;
             }
         }
 
@@ -243,7 +243,7 @@
             
             const invItems = Object.keys(appData.user.inventory);
             if (invItems.length === 0) {
-                grid.innerHTML = \`<div class="empty-state"><h3>🎒 حقيبتك فارغة</h3><p>لا تملك عناصر لبيعها في المزاد.</p></div>\`;
+                grid.innerHTML = `<div class="empty-state"><h3>🎒 حقيبتك فارغة</h3><p>لا تملك عناصر لبيعها في المزاد.</p></div>`;
                 return;
             }
 
@@ -254,25 +254,25 @@
                 // Suggest starting bid at 50% of price
                 const startPrice = Math.floor(item.price * 0.5);
 
-                grid.innerHTML += \`
+                grid.innerHTML += `
                     <div class="auc-card">
-                        <img class="auc-img" src="\${item.image || 'https://via.placeholder.com/400x200?text=No+Image'}" alt="\${item.name}">
+                        <img class="auc-img" src="${item.image || 'https://via.placeholder.com/400x200?text=No+Image'}" alt="${item.name}">
                         <div class="auc-body">
-                            <div class="auc-title"><span>\${item.emoji} \${item.name}</span></div>
+                            <div class="auc-title"><span>${item.emoji} ${item.name}</span></div>
                             <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:1rem;">قم بعرض هذا العنصر في المزاد. سيستمر المزاد لمدة 15 دقيقة.</p>
                             
                             <div class="bid-controls">
-                                <input type="number" id="start-val-\${id}" class="bid-input" value="\${startPrice}" min="1">
-                                <button class="btn btn-bid" onclick="startAuction('\${id}')">ابدأ المزاد 🚀</button>
+                                <input type="number" id="start-val-${id}" class="bid-input" value="${startPrice}" min="1">
+                                <button class="btn btn-bid" onclick="startAuction('${id}')">ابدأ المزاد 🚀</button>
                             </div>
                         </div>
                     </div>
-                \`;
+                `;
             }
         }
 
         async function placeBid(auctionId) {
-            const bidAmount = document.getElementById(\`bid-val-\${auctionId}\`).value;
+            const bidAmount = document.getElementById(`bid-val-${auctionId}`).value;
             try {
                 const res = await fetch('/api/auction/bid', {
                     method: 'POST',
@@ -292,8 +292,8 @@
         }
 
         async function startAuction(itemId) {
-            const startingBid = document.getElementById(\`start-val-\${itemId}\`).value;
-            if(!confirm(\`هل أنت متأكد من بدء المزاد بسعر يبدأ من \${startingBid} 💰؟\n(سيتم خصم العنصر من حقيبتك فوراً)\`)) return;
+            const startingBid = document.getElementById(`start-val-${itemId}`).value;
+            if(!confirm(`هل أنت متأكد من بدء المزاد بسعر يبدأ من ${startingBid} 💰؟\n(سيتم خصم العنصر من حقيبتك فوراً)`)) return;
             
             try {
                 const res = await fetch('/api/auction/start', {
@@ -323,8 +323,8 @@
 
         function showToast(msg, type) {
             const toast = document.getElementById('toast');
-            toast.className = \`show \${type}\`;
-            toast.innerHTML = type === 'success' ? \`✅ \${msg}\` : \`❌ \${msg}\`;
+            toast.className = `show ${type}`;
+            toast.innerHTML = type === 'success' ? `✅ ${msg}` : `❌ ${msg}`;
             setTimeout(() => { toast.className = ''; }, 3000);
         }
         
