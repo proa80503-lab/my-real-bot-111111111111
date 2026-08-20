@@ -32,45 +32,43 @@ module.exports = {
 
         // 1. رتبة السجن
         try {
-            let jailRole = guild.roles.cache.find(r => r.name === config.jailRoleName || r.name.includes('سجين'));
+            const jailRoleName = config.jailRoleName || '🔒┃سجين';
+            let jailRole = guild.roles.cache.find(r =>
+                r.name === jailRoleName ||
+                r.name === config.jailRoleName ||
+                r.name.toLowerCase().includes('سجين') ||
+                r.name.toLowerCase().includes('jail')
+            );
             if (!jailRole) {
                 jailRole = await guild.roles.create({
-                    name: config.jailRoleName || '🔒┃سجين',
+                    name: jailRoleName,
                     color: '#000000',
                     permissions: [],
                     reason: 'إعداد الرتب التلقائي'
                 });
-                
-                // منع الرتبة من الكتابة والرؤية
-                for (const channel of guild.channels.cache.values()) {
-                    if (channel.isTextBased() || channel.isVoiceBased()) {
-                        if (channel.name.includes('سجن') || channel.name.includes('jail')) continue;
-                        await channel.permissionOverwrites.edit(jailRole.id, {
-                            SendMessages: false,
-                            Speak: false,
-                            ViewChannel: false
-                        }).catch(() => {});
-                    }
-                }
-                results.success.push(`✅ رتبة السجن (**${jailRole.name}**)`);
+                results.success.push(`✅ تم إنشاء رتبة السجن (**${jailRole.name}**)`);
             } else {
-                results.skipped.push(`🔄 رتبة السجن موجودة مسبقاً`);
-                // تحديث الصلاحيات للرتبة الموجودة
-                for (const channel of guild.channels.cache.values()) {
-                    if (channel.isTextBased() || channel.isVoiceBased()) {
-                        if (channel.name.includes('سجن') || channel.name.includes('jail')) continue;
-                        await channel.permissionOverwrites.edit(jailRole.id, {
-                            SendMessages: false,
-                            Speak: false,
-                            ViewChannel: false
-                        }).catch(() => {});
-                    }
+                results.skipped.push(`🔄 رتبة السجن موجودة — سيتم تحديث صلاحياتها`);
+            }
+
+            // تطبيق صلاحيات السجن على جميع القنوات
+            for (const channel of guild.channels.cache.values()) {
+                if (channel.isTextBased() || channel.isVoiceBased()) {
+                    if (channel.name.includes('سجن') || channel.name.includes('jail')) continue;
+                    await channel.permissionOverwrites.edit(jailRole.id, {
+                        SendMessages: false,
+                        Speak: false,
+                        ViewChannel: false
+                    }).catch(() => {});
                 }
             }
+
             db.updateGuildData(guild.id, { jailRole: jailRole.id });
 
-            // إعطاء السجين صلاحية الرؤية لروم السجن
-            let jailChannel = guild.channels.cache.find(c => c.name.includes('سجن') || c.name.includes('jail'));
+            // قناة السجن
+            let jailChannel = guild.channels.cache.find(c =>
+                c.name.includes('سجن') || c.name.toLowerCase().includes('jail')
+            );
             if (!jailChannel) {
                 jailChannel = await guild.channels.create({
                     name: '🔒┃السجن',
@@ -95,26 +93,36 @@ module.exports = {
 
         // 2. رتبة الكتم
         try {
-            let muteRole = guild.roles.cache.find(r => r.name === config.muteRoleName || r.name === '🔇┃مكتوم');
+            const muteRoleName = config.muteRoleName || '🔇┃مكتوم';
+            let muteRole = guild.roles.cache.find(r =>
+                r.name === muteRoleName ||
+                r.name === config.muteRoleName ||
+                r.name.toLowerCase().includes('مكتوم') ||
+                r.name.toLowerCase().includes('muted')
+            );
             if (!muteRole) {
                 muteRole = await guild.roles.create({
-                    name: config.muteRoleName || '🔇┃مكتوم',
+                    name: muteRoleName,
                     color: '#808080',
                     permissions: [],
                     reason: 'إعداد الرتب التلقائي'
                 });
-                
-                for (const channel of guild.channels.cache.values()) {
-                    if (channel.isTextBased() || channel.isVoiceBased()) {
-                        await channel.permissionOverwrites.edit(muteRole.id, {
-                            SendMessages: false
-                        }).catch(() => {});
-                    }
-                }
-                results.success.push(`✅ رتبة الكتم (**${muteRole.name}**)`);
+                results.success.push(`✅ تم إنشاء رتبة الكتم (**${muteRole.name}**)`);
             } else {
-                results.skipped.push(`🔄 رتبة الكتم موجودة مسبقاً`);
+                results.skipped.push(`🔄 رتبة الكتم موجودة — سيتم تحديث صلاحياتها`);
             }
+
+            // تطبيق صلاحيات الكتم على جميع القنوات
+            for (const channel of guild.channels.cache.values()) {
+                if (channel.isTextBased() || channel.isVoiceBased()) {
+                    await channel.permissionOverwrites.edit(muteRole.id, {
+                        SendMessages: false,
+                        Speak: false,
+                        AddReactions: false
+                    }).catch(() => {});
+                }
+            }
+
             db.updateGuildData(guild.id, { muteRole: muteRole.id });
         } catch (e) {
             results.failed.push(`❌ رتبة الكتم: ${e.message}`);
