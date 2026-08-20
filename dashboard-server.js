@@ -34,7 +34,7 @@ function generateWebToken(user) {
         userId: user.id,
         username: user.username || user.globalName || 'مستخدم',
         avatar,
-        expiresAt: Date.now() + (1000 * 60 * 60 * 2) // 2 hours
+        expiresAt: Date.now() + (1000 * 60 * 30) // 30 دقيقة (تقليص من ساعتين للأمان)
     });
     return token;
 }
@@ -762,12 +762,19 @@ const server = http.createServer(async (req, res) => {
             const item = config.shopItems[itemId];
             
             if (!item) return sendJson(400, { success: false, error: 'عنصر غير موجود' });
+            
+            // FIX: فحص حد الجلسة أولاً قبل معالجة أي شيء
+            if ((session.buyCount || 0) >= 10) {
+                return sendJson(429, { success: false, error: 'لقد تجاوزت الحد الأقصى لعمليات الشراء في هذه الجلسة. اطلب رابطاً جديداً من الديسكورد.' });
+            }
+            
             if ((userData.balance || 0) < item.price) return sendJson(400, { success: false, error: 'رصيدك لا يكفي' });
             if (itemId !== 'bankextend' && itemId !== 'moneybag' && userData.inventory && userData.inventory[itemId]) return sendJson(400, { success: false, error: 'أنت تملك هذا العنصر بالفعل' });
             
             const removed = db.removeMoney(userId, item.price);
             if (!removed) return sendJson(400, { success: false, error: 'رصيدك لا يكفي' });
             
+            session.buyCount = (session.buyCount || 0) + 1;
             db.addTransaction(userId, 'shop_buy_web', item.price, `Bought ${item.name} from Web`);
             
             const freshUser = db.getUserData(userId);
@@ -775,11 +782,18 @@ const server = http.createServer(async (req, res) => {
             const now = Date.now();
             
             if (itemId === 'moneybag') {
-                const cash = Math.floor(Math.random() * 5000) + 1000;
+                // FIX: كيس المال 200-3500 (ليتوافق مع نسخة الديسكورد)
+                const cash = Math.floor(Math.random() * 3300) + 200;
                 db.addMoney(userId, cash);
                 db.addTransaction(userId, 'moneybag_open', cash, 'Opened money bag');
             } else if (itemId === 'bankextend') {
-                db.updateFields(userId, { bankCap: (freshUser.bankCap || 0) + 50000 });
+                const maxExtensions = 10;
+                const currentExt = freshUser.bankExtensions || 0;
+                if (currentExt >= maxExtensions) {
+                    db.addMoney(userId, item.price); // إعادة المبلغ
+                    return sendJson(400, { success: false, error: 'وصلت للحد الأقصى لتوسعة البنك (10 توسعات)' });
+                }
+                db.updateFields(userId, { bankCap: (freshUser.bankCap || 0) + 50000, bankExtensions: currentExt + 1 });
             } else {
                 inv[itemId] = { purchasedAt: now, expiresAt: item.duration === 999 ? null : now + (item.duration * 24 * 60 * 60 * 1000) };
                 if (itemId === 'shield') db.updateFields(userId, { robShieldUntil: now + 86400000 });
@@ -800,7 +814,7 @@ const server = http.createServer(async (req, res) => {
             if (!item) return sendJson(400, { success: false, error: 'عنصر غير موجود' });
             if (!userData.inventory || !userData.inventory[itemId]) return sendJson(400, { success: false, error: 'أنت لا تملك هذا العنصر' });
             
-            // Refund 50%
+            // Refund 50% using addMoney for consistent limit enforcement
             const refund = Math.floor(item.price * 0.5);
             const inv = { ...userData.inventory };
             delete inv[itemId];
