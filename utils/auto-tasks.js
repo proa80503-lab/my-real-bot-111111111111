@@ -1,6 +1,7 @@
 const { EmbedBuilder } = require('discord.js');
 const db = require('./database');
 const { PremiumEmbedBuilder } = require('./embed-builder');
+const botSettings = require('./bot-settings');
 
 // مهام تلقائية ذكية
 
@@ -207,8 +208,8 @@ async function cleanupExpiredRooms(client) {
 
 // ─── 8. تذكير اليومي ─────────────────────────────────────────────────────────
 async function remindDailyReward(client) {
-    const cfg = require('../config');
-    if (cfg.autoMessagesEnabled === false) return;
+    if (botSettings.get('dailyReminderEnabled') === false) return;
+    if (botSettings.get('autoMessagesEnabled') === false) return;
     const { EmbedBuilder } = require('discord.js');
     const now = new Date();
 
@@ -241,8 +242,8 @@ async function remindDailyReward(client) {
 
 // ─── 9. ملخص نشاط السيرفر المسائي ────────────────────────────────────────────
 async function dailySummary(client) {
-    const cfg = require('../config');
-    if (cfg.autoMessagesEnabled === false) return;
+    if (botSettings.get('dailySummaryEnabled') === false) return;
+    if (botSettings.get('autoMessagesEnabled') === false) return;
     const { EmbedBuilder } = require('discord.js');
     const aiBrain = require('./ai-brain');
     const now = new Date();
