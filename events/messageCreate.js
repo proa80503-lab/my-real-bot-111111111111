@@ -398,6 +398,14 @@ module.exports = {
             const command = _lookupCommand(commandName, message.client);
 
             if (command) {
+                // فحص أوامر معطلة
+                const botSettings = require('../utils/bot-settings');
+                if (botSettings.isCommandDisabled(command.name)) {
+                    if (message.author.id !== config.ownerId) {
+                        return message.reply('⛔ هذا الأمر معطل حالياً من قِبل الإدارة.').catch(() => {});
+                    }
+                }
+
                 // فحص صلاحيات
                 if (command.ownerOnly && message.author.id !== config.ownerId) {
                     return message.reply('❌ هذا الأمر للمالك فقط!').catch(() => { });
@@ -451,11 +459,17 @@ module.exports = {
                 // تحديث تحدي الرسائل
                 await dailyChallenges.updateProgress(message.author.id, 'messages', 1, message).catch(() => { });
 
-                // نظام الرد العشوائي بالذكاء الاصطناعي كل 10 رسائل
+                // نظام الرد العشوائي بالذكاء الاصطناعي كل N رسالة (قابل للتحكم)
                 globalMessageCounter++;
-                if (globalMessageCounter >= 10) {
+                const freq = (() => {
+                    try { return require('../utils/bot-settings').get('aiRandomReplyFrequency') || 10; } catch { return 10; }
+                })();
+                const aiEnabled = (() => {
+                    try { return require('../utils/bot-settings').get('aiRandomReplyEnabled') !== false; } catch { return true; }
+                })();
+                if (aiEnabled && globalMessageCounter >= freq) {
                     globalMessageCounter = 0;
-                    if (Math.random() > 0.3) { // نسبة 70% للرد لإعطاء عشوائية واقعية
+                    if (Math.random() > 0.3) { // 70% احتمال
                         setTimeout(() => _handleAIReply(message, true).catch(() => {}), 2000);
                     }
                 }
