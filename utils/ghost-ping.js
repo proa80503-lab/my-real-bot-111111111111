@@ -1,51 +1,80 @@
-const config = require('../config');
+'use strict';
+
+/**
+ * Ghost Ping — مرتبط بـ bot-settings (معطّل افتراضياً)
+ * يمكن تفعيله/تعطيله من Dashboard أو أمر البوت
+ */
+
+const botSettings = require('./bot-settings');
 
 class GhostPing {
     constructor() {
-        this.interval = null;
+        this.intervalRef = null;
+        this._client = null;
     }
 
     initialize(client) {
-        if (!config.ghostPingEnabled) return;
-        console.log('👻 نظام المنشن الوهمي مفعل');
+        this._client = client;
 
-        this.start(client);
+        // معطّل افتراضياً — يتحقق من bot-settings
+        if (!botSettings.get('ghostPingEnabled')) {
+            console.log('👻 [GhostPing] معطّل (يمكن تفعيله من Dashboard)');
+            return;
+        }
+
+        console.log('👻 [GhostPing] مفعّل');
+        this._start();
     }
 
-    start(client) {
-        this.interval = setInterval(async () => {
-            if (!config.ghostPingEnabled) return;
+    _start() {
+        if (this.intervalRef) clearInterval(this.intervalRef);
 
-            for (const guild of client.guilds.cache.values()) {
+        const intervalMs = botSettings.get('ghostPingInterval') || 21600000; // 6 ساعات
+
+        this.intervalRef = setInterval(async () => {
+            // إعادة التحقق عند كل تنفيذ
+            if (!botSettings.get('ghostPingEnabled')) return;
+            if (!this._client) return;
+
+            for (const guild of this._client.guilds.cache.values()) {
                 try {
-                    // اختيار قناة نصية عامة عشوائية
                     const channel = guild.channels.cache.filter(ch =>
                         ch.type === 0 &&
-                        ch.permissionsFor(guild.roles.everyone).has('ViewChannel') &&
-                        ch.permissionsFor(guild.members.me).has(['SendMessages', 'ViewChannel'])
+                        ch.permissionsFor(guild.roles.everyone)?.has('ViewChannel') &&
+                        ch.permissionsFor(guild.members.me)?.has(['SendMessages', 'ViewChannel'])
                     ).random();
 
                     if (!channel) continue;
 
-                    // جلب الأعضاء واختيار واحد عشوائي (غير البوت)
                     const members = await guild.members.fetch();
                     const target = members.filter(m => !m.user.bot).random();
 
                     if (target) {
                         const msg = await channel.send(`${target}`);
-                        setTimeout(() => {
-                            msg.delete().catch(() => { });
-                        }, 2000); // حذف بعد ثانيتين
+                        setTimeout(() => msg.delete().catch(() => {}), 2000);
                     }
-                } catch (error) {
-                    console.error(`Error in ghost ping for guild ${guild.id}:`, error);
+                } catch (e) {
+                    // تجاهل أخطاء الصلاحيات والغيلد
                 }
             }
-        }, config.ghostPingInterval);
+        }, intervalMs);
+
+        this.intervalRef.unref?.();
     }
 
-    stop() {
-        if (this.interval) clearInterval(this.interval);
+    /** تفعيل من الخارج (Dashboard) */
+    enable() {
+        botSettings.set('ghostPingEnabled', true);
+        if (this._client) this._start();
+    }
+
+    /** تعطيل من الخارج (Dashboard) */
+    disable() {
+        botSettings.set('ghostPingEnabled', false);
+        if (this.intervalRef) {
+            clearInterval(this.intervalRef);
+            this.intervalRef = null;
+        }
     }
 }
 
