@@ -337,7 +337,7 @@ module.exports = {
             return await playNumberBomb(message);
         } else if (sub === 'speed' || sub === 'سرعة') {
             return await playSpeedChallenge(message);
-        } else if (sub === 'chain' || sub === || sub === 'تسلسل') {
+        } else if (sub === 'chain' || sub === 'تسلسل') {
             return await playWordChain(message);
         } else {
             // عرض القائمة
