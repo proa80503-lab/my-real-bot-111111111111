@@ -15,6 +15,7 @@ const path   = require('path');
 const db     = require('./utils/database');
 const dConf  = require('./utils/dashboard-config');
 const config = require('./config'); // Needed for shopItems
+const botSettings = require('./utils/bot-settings');
 
 // ─── Token Management for Web UIs (Store/Auction) ─────────────────────────
 const webTokens = new Map(); // token -> { userId, username, avatar, expiresAt }
@@ -46,7 +47,7 @@ const activeAuctions = new Map(); // auctionId -> { itemId, sellerId, sellerName
 
 // ─── الإعدادات ───────────────────────────────────────────────────────────────
 const PORT           = process.env.PORT || 3000;
-const DASHBOARD_KEY  = process.env.DASHBOARD_KEY || crypto.randomBytes(16).toString('hex');
+const DASHBOARD_KEY  = botSettings.get('dashboardKey'); // استخدام الإعداد المركزي
 const RENDER_URL     = process.env.RENDER_EXTERNAL_URL || null; // يُعيَّن تلقائياً على Render
 const BASE_URL       = RENDER_URL || `http://localhost:${PORT}`;
 
@@ -66,10 +67,11 @@ module.exports.DASHBOARD_KEY   = DASHBOARD_KEY;
 
 // ─── قراءة آمنة لقاعدة البيانات ──────────────────────────────────────────────
 function readDB() {
-    try {
-        if (fs.existsSync(dbPath)) return JSON.parse(fs.readFileSync(dbPath, 'utf8'));
-    } catch {}
-    return { users: {}, guilds: {} };
+    // نستخدم الآن الـ database manager لضمان عدم وجود Race Conditions
+    const allUsers = db.getAllUsers();
+    // نستخدم الـ cache الداخلي بدلاً من قراءة الملف
+    const _dbCache = db.loadDatabase();
+    return { users: _dbCache.users || {}, guilds: _dbCache.guilds || {} };
 }
 
 // ─── قراءة آخر سطور اللوق ──────────────────────────────────────────────────
@@ -529,6 +531,18 @@ code,.uid{font-family:var(--mono);background:rgba(88,101,242,.12);border-radius:
         </div>
       </div>
 
+      <!-- إعدادات النظام -->
+      <div class="ic">
+        <h3>⚙️ إعدادات البوت الحية</h3>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px;">
+          <button class="btn" style="background:var(--accent)" onclick="submitForm('/api/control/settings', { autoMessagesEnabled: true }, 'تم تفعيل الرسائل التلقائية')">✅ تفعيل الرسائل التلقائية (AI, نكت...)</button>
+          <button class="btn danger" onclick="submitForm('/api/control/settings', { autoMessagesEnabled: false }, 'تم تعطيل الرسائل التلقائية')">❌ تعطيل الرسائل التلقائية</button>
+          
+          <button class="btn" style="background:var(--purple)" onclick="submitForm('/api/control/settings', { ghostPingEnabled: true }, 'تم تفعيل المنشن الوهمي')">👻 تفعيل المنشن الوهمي</button>
+          <button class="btn danger" onclick="submitForm('/api/control/settings', { ghostPingEnabled: false }, 'تم تعطيل المنشن الوهمي')">🚫 تعطيل المنشن الوهمي</button>
+        </div>
+      </div>
+
       <!-- إرسال هدية -->
       <div class="ic">
         <h3>🎁 إرسال هدية لعضو</h3>
@@ -539,6 +553,18 @@ code,.uid{font-family:var(--mono);background:rgba(88,101,242,.12);border-radius:
         </div>
       </div>
 
+      <!-- إيقاف الأوامر -->
+      <div class="ic">
+        <h3>⛔ تعطيل الأوامر</h3>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px;">
+          <input type="text" id="cmd-name" class="url-input" placeholder="اسم الأمر (مثال: casino)">
+          <div style="display:flex;gap:10px;">
+            <button class="btn danger" style="flex:1" onclick="submitForm('/api/control/command', { action: 'disable', command: document.getElementById('cmd-name').value }, 'تم تعطيل الأمر!')">تعطيل</button>
+            <button class="btn success" style="flex:1" onclick="submitForm('/api/control/command', { action: 'enable', command: document.getElementById('cmd-name').value }, 'تم تفعيل الأمر!')">تفعيل</button>
+          </div>
+        </div>
+      </div>
+
       <!-- إرسال إعلان -->
       <div class="ic">
         <h3>📢 إرسال إعلان للديسكورد</h3>
@@ -546,6 +572,15 @@ code,.uid{font-family:var(--mono);background:rgba(88,101,242,.12);border-radius:
           <input type="text" id="ann-channel" class="url-input" placeholder="ID الروم">
           <textarea id="ann-msg" class="url-input" rows="3" placeholder="اكتب رسالتك هنا..."></textarea>
           <button class="btn" style="background:var(--orange)" onclick="submitForm('/api/control/announce', { channelId: document.getElementById('ann-channel').value, message: document.getElementById('ann-msg').value }, 'تم إرسال الإعلان!')">🚀 إرسال الرسالة</button>
+        </div>
+      </div>
+
+      <!-- صيانة البوت -->
+      <div class="ic">
+        <h3>🔄 صيانة البوت</h3>
+        <p style="font-size:11px;color:var(--muted);margin-bottom:10px;">إعادة تشغيل البوت يتطلب تشغيله بـ PM2 أو Nodemon أو أن يكون على Render.</p>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px;">
+          <button class="btn danger" style="width:100%;justify-content:center;padding:12px;" onclick="if(confirm('هل أنت متأكد من إعادة التشغيل؟')) submitForm('/api/control/restart', {}, 'جاري إعادة التشغيل...')">🔄 إعادة تشغيل البوت (Restart)</button>
         </div>
       </div>
     </div>
@@ -649,6 +684,19 @@ const server = http.createServer(async (req, res) => {
             return sendJson(200, { success: true });
         }
         
+        if (urlPath === '/api/control/settings') {
+            const botSettings = require('./utils/bot-settings');
+            if (body.autoMessagesEnabled !== undefined) {
+                botSettings.set('autoMessagesEnabled', !!body.autoMessagesEnabled);
+            }
+            if (body.ghostPingEnabled !== undefined) {
+                const gp = require('./utils/ghost-ping');
+                if (body.ghostPingEnabled) gp.enable();
+                else gp.disable();
+            }
+            return sendJson(200, { success: true });
+        }
+
         if (urlPath === '/api/control/gift') {
             if (!body.userId || !body.amount) return sendJson(400, { success: false, error: 'بيانات ناقصة' });
             
@@ -666,8 +714,25 @@ const server = http.createServer(async (req, res) => {
                     console.error('[Dashboard] Failed to send gift DM:', err.message);
                 }
             }
-            
             return sendJson(200, { success: true });
+        }
+
+        if (urlPath === '/api/control/command') {
+            if (!body.action || !body.command) return sendJson(400, { success: false, error: 'بيانات ناقصة' });
+            const botSettings = require('./utils/bot-settings');
+            if (body.action === 'disable') {
+                botSettings.disableCommand(body.command);
+            } else if (body.action === 'enable') {
+                botSettings.enableCommand(body.command);
+            }
+            return sendJson(200, { success: true });
+        }
+
+        if (urlPath === '/api/control/restart') {
+            sendJson(200, { success: true });
+            console.log('🔄 إغلاق البوت بطلب من لوحة التحكم...');
+            setTimeout(() => process.exit(0), 1000); // Exit process, assuming PM2/nodemon will restart it
+            return;
         }
 
         if (urlPath === '/api/control/announce') {
