@@ -1,477 +1,521 @@
-const { Events, MessageFlags } = require('discord.js');
-const helpModule = require('../commands/main/help');
-const ownerDashboard = require('../commands/main/owner-dashboard');
-const tttModule = require('../commands/games/ttt');
-const rpsModule = require('../commands/games/rps');
-const triviaModule = require('../commands/games/trivia');
-const casinoAdvancedModule = require('../commands/economy/casino');
-const clans = require('../commands/social/clans');
-const punishmentsUtils = require('../utils/punishments');
-const colorRoles = require('../commands/moderation/color-roles');
-const ownerCommands = require('../commands/main/status');
-const menuModule = require('../commands/main/menu');
-const balanceModule = require('../commands/economy/balance');
-const adminPanelModule = require('../commands/moderation/panel');
-const economyModule = require('../commands/economy/shop');
-const companyModule = require('../commands/economy/company');
-const ecoHub = require('../commands/economy/economy-hub');
-const gamesHub = require('../commands/games/games-hub');
+'use strict';
 
-// ── الأوامر الجديدة بالأزرار ────────────────────────────────────────────────────
-const hangmanModule = require('../commands/games/hangman');
-const mathModule = require('../commands/games/math');
-const memoryModule = require('../commands/games/memory');
-const funButtons = require('../commands/fun/fun-buttons');
-const marketModule = require('../commands/economy/market');
-const casinoModule = require('../commands/economy/casino');
-const achievementsModule = require('../commands/main/achievements-cmd');
-const analyticsModule = require('../commands/main/analytics');
-const minigamesModule = require('../commands/games/minigames');
-const dailyModule = require('../commands/economy/daily');
-const workModule = require('../commands/economy/work');
-const marryModule = require('../commands/social/marry');
-const modButtonsModule = require('../commands/moderation/mod-buttons');
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * interactionCreate.js — نظام Routing مركزي لجميع Interactions
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * الترتيب:
+ *   1. ModalSubmit
+ *   2. StringSelectMenu
+ *   3. Buttons
+ *   4. ChatInputCommand (slash commands — محجوز للمستقبل)
+ *   5. Autocomplete
+ *
+ * قواعد defer:
+ *   - كل handler مسؤول عن defer نفسه
+ *   - لا auto-defer شامل هنا (كان يسبب InteractionAlreadyReplied)
+ *   - الـ safeAck هنا فقط كخط دفاع أخير للأزرار المجهولة
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+const { Events } = require('discord.js');
+
+// ── Lazy imports — محمّلة عند أول استخدام لتقليل وقت الـ boot ────────────────
+const _mod = {};
+function _require(name) {
+    if (!_mod[name]) {
+        try { _mod[name] = require(name); }
+        catch (e) { console.error(`[InteractionCreate] فشل تحميل: ${name}`, e.message); return null; }
+    }
+    return _mod[name];
+}
 
 module.exports = {
     name: Events.InteractionCreate,
+
     async execute(interaction) {
         try {
-            // ===== AUTO-DEFER MONKEY PATCH =====
-            // This safely defers all slow buttons to prevent "Application didn't respond in time"
-            // except for buttons that open modals (you cannot open a modal on a deferred interaction).
-            if (interaction.isButton()) {
-                const id = interaction.customId;
-                const modalPrefixes = [
-                    'clan_create', 'clan_rename', 'clan_edit_rank', 'clan_invite', 'clan_kick', 'clan_desc',
-                    'eco_deposit', 'eco_withdraw', 'eco_transfer', 'eco_rob',
-                    'adm_warn', 'adm_jail', 'adm_kick', 'adm_ban', 'adm_unmute', 'adm_unjail', 'adm_unban',
-                    'status_btn_', 'company_name', 'company_desc', 'company_logo', 'company_color', 'room_create'
-                ];
-                const isModalBtn = modalPrefixes.some(p => id.startsWith(p));
-                const needsDeferReply = id.startsWith('color_') || id.startsWith('colorole_')
-                    || id.startsWith('work_') || id.startsWith('daily_')
-                    || id.startsWith('bot_guide_');
 
-                if (!isModalBtn && !needsDeferReply) {
-                    await interaction.deferUpdate().catch(() => {});
-                } else if (!isModalBtn && needsDeferReply) {
-                    await interaction.deferReply({ ephemeral: true }).catch(() => {});
-                }
-
-                // ── مساعد لكشف ephemeral بجميع الأشكال ─────────────────────
-                function _isEphemeral(options) {
-                    if (!options) return false;
-                    if (options.ephemeral === true) return true;
-                    const f = options.flags;
-                    if (!f) return false;
-                    // flags رقم مباشر
-                    if (typeof f === 'number') return (f & 64) !== 0;
-                    // flags كـ BitField object
-                    if (typeof f === 'object') {
-                        if (typeof f.has === 'function') return f.has(64);
-                        if (typeof f.bitfield === 'number') return (f.bitfield & 64) !== 0;
-                    }
-                    return false;
-                }
-
-                // Monkey-patch update to editReply if deferred
-                const origUpdate = interaction.update.bind(interaction);
-                interaction.update = async (options) => {
-                    if (interaction.deferred || interaction.replied) return interaction.editReply(options).catch(()=>{});
-                    return origUpdate(options);
-                };
-
-                // Monkey-patch reply to followUp if deferred
-                const origReply = interaction.reply.bind(interaction);
-                interaction.reply = async (options) => {
-                    if (interaction.deferred || interaction.replied) {
-                        return interaction.followUp({ ...options, ephemeral: _isEphemeral(options) }).catch(()=>{});
-                    }
-                    return origReply(options);
-                };
-                
-                // Protect double defer calls
-                const origDeferUpdate = interaction.deferUpdate.bind(interaction);
-                interaction.deferUpdate = async (options) => {
-                    if (interaction.deferred || interaction.replied) return;
-                    return origDeferUpdate(options);
-                };
-                
-                const origDeferReply = interaction.deferReply.bind(interaction);
-                interaction.deferReply = async (options) => {
-                    if (interaction.deferred || interaction.replied) return;
-                    return origDeferReply(options);
-                };
-            }
-            // ===================================
-
-            // ===== 1. معالجة الـ Modals =====
+            // ══════════════════════════════════════════════════════════════
+            // 1. MODAL SUBMIT
+            // ══════════════════════════════════════════════════════════════
             if (interaction.isModalSubmit()) {
-                // 🏠 Quick Room Modals
-                if (interaction.customId.startsWith('quickroom_modal_')) {
-                    const roomCreator = require('../commands/moderation/room-creator');
-                    await roomCreator.handleQuickRoomModal(interaction);
-                }
-                // Clan modals
-                else if (interaction.customId === 'clan_create_modal') {
-                    await clans.handleCreateSubmit(interaction);
-                } else if (interaction.customId === 'clan_invite_modal') {
-                    await clans.handleInviteSubmit(interaction);
-                } else if (interaction.customId === 'clan_kick_modal') {
-                    await clans.handleKickSubmit(interaction);
-                } else if (interaction.customId === 'clan_editrank_modal') {
-                    await clans.handleEditRankModalSubmit(interaction);
-                } else if (interaction.customId.startsWith('clan_desc_modal_')) {
-                    const clanId = interaction.customId.replace('clan_desc_modal_', '');
-                    await clans.handleDescSubmit(interaction, clanId);
-                } else if (interaction.customId.startsWith('clan_rename_modal_')) {
-                    const clanId = interaction.customId.replace('clan_rename_modal_', '');
-                    await clans.handleRenameSubmit(interaction, clanId);
-                }
-                // Economy Hub modals
-                else if ([
-                    'eco_deposit_modal', 'eco_withdraw_modal', 'eco_transfer_modal',
-                    'eco_vault_deposit_modal', 'eco_vault_withdraw_modal'
-                ].includes(interaction.customId)) {
-                    await ecoHub.handleEcoModal(interaction);
-                }
-                // Status modals
-                else if (interaction.customId.startsWith('status_modal_')) {
-                    await ownerCommands.handleStatusInteraction(interaction);
-                }
-                // Economy modals
-                else if (interaction.customId.startsWith('econ_')) {
-                    if (balanceModule.handleEconomyModal) await balanceModule.handleEconomyModal(interaction);
-                }
-                // Admin modals (both legacy admin_ and new adm_)
-                else if (interaction.customId.startsWith('admin_') || interaction.customId.startsWith('adm_')) {
-                    await adminPanelModule.handleAdminModal(interaction);
-                }
-                // Owner dashboard modals
-                else if (interaction.customId.startsWith('owner_')) {
-                    await ownerDashboard.handleOwnerModal(interaction);
-                }
-                // Company modals
-                else if (interaction.customId.startsWith('comp_')) {
-                    await companyModule.handleCompanyModal(interaction);
-                }
+                await _handleModal(interaction);
                 return;
             }
 
-            // ===== 2. معالجة القوائم المنسدلة =====
+            // ══════════════════════════════════════════════════════════════
+            // 2. STRING SELECT MENU
+            // ══════════════════════════════════════════════════════════════
             if (interaction.isStringSelectMenu()) {
-                if (interaction.customId.startsWith('clan_rank_select_')) {
-                    const targetId = interaction.customId.replace('clan_rank_select_', '');
-                    await clans.handleRankSelection(interaction, targetId);
-                } else if (interaction.customId.startsWith('clan_invite_rank_')) {
-                    // تنسيق: clan_invite_rank_clan_1|targetId|guildId
-                    const raw = interaction.customId.replace('clan_invite_rank_', '');
-                    const [clanId, targetId, guildId] = raw.split('|');
-                    await clans.handleInviteRankSelect(interaction, clanId, targetId, guildId);
-                } else if (interaction.customId === 'trivia_topic_select') {
-                    await triviaModule.handleTriviaInteraction(interaction);
-                } else if (interaction.customId === 'help_select_category') {
-                    await helpModule.handleHelpInteraction(interaction);
-                }
+                await _handleSelectMenu(interaction);
                 return;
             }
 
-            // ===== 3. معالجة الأزرار =====
+            // ══════════════════════════════════════════════════════════════
+            // 3. BUTTONS
+            // ══════════════════════════════════════════════════════════════
             if (interaction.isButton()) {
-                const id = interaction.customId;
-
-                // 🏠 Room Creator buttons (including quickroom)
-                if (id.startsWith('room_') || id.startsWith('quickroom_')) {
-                    const roomCreator = require('../commands/moderation/room-creator');
-                    await roomCreator.handleRoomInteraction(interaction);
-                }
-                // 🗳️ Poll buttons
-                else if (id.startsWith('poll_')) {
-                    const pollCmd = require('../commands/social/poll');
-                    await pollCmd.handlePollInteraction(interaction);
-                }
-                // 🎨 Color buttons — موحّد (color_btn_ و color_ ← نفس المعالج، إصلاح التعارض)
-                else if (id.startsWith('color_btn_') || (id.startsWith('color_') && !id.startsWith('colorole_'))) {
-                    const colorName = id.startsWith('color_btn_')
-                        ? id.replace('color_btn_', '')
-                        : id.replace('color_', '');
-                    const colorRolesFixed = require('../commands/moderation/color-roles');
-                    await colorRolesFixed.assignColorRole(interaction, colorName);
-                }
-                // ✅ Server Setup confirm/cancel — collector in server-setup.js handles logic
-                // We must deferUpdate() to prevent Discord's "This interaction failed" error
-                else if (id === 'setup_confirm' || id === 'setup_cancel') {
-                    // Don't defer — the awaitMessageComponent collector inside server-setup.js
-                    // will call response.update() which counts as acknowledging the interaction.
-                    // If somehow not caught (race condition), silently ignore.
-                    // Do nothing here — the collector handles it.
-                }
-                // 🤖 Bot guide buttons
-                else if (id.startsWith('bot_guide_')) {
-                    const guides = {
-                        'bot_guide_economy': '💰 **الاقتصاد:** `رصيد` `يومي` `عمل` `متجر` `استثمار` `بنك` `تحويل @شخص`',
-                        'bot_guide_games': '🎮 **الألعاب:** `xo @شخص` `رحجة @شخص` `تريفيا` `كازينو` `العاب`',
-                        'bot_guide_rooms': '🏠 **الغرف:** `غرفة جديدة [اسم] [لعبة]` `غرف` `غرفتي` `حذف غرفة`',
-                        'bot_guide_ai': '🧠 **الذكاء الاصطناعي:** منشن البوت في أي رسالة وسيرد عليك فوراً! يتذكر محادثاتك ويتعلم منها.',
-                    };
-                    await interaction.reply({ content: guides[id] || '❓ غير معروف', ephemeral: true });
-                }
-                // ❌⭕ Tic-Tac-Toe (v3 — bot, pvp, accept, decline, move)
-                else if (id.startsWith('ttt_')) {
-                    await tttModule.handleTicTacToeInteraction(interaction);
-                }
-                // 🪊📄✂️ Rock Paper Scissors (v3)
-                else if (id.startsWith('rps_')) {
-                    await rpsModule.handleRPSInteraction(interaction);
-                }
-                // 😵 Hangman (loحة الحروف)
-                else if (id.startsWith('hangman_')) {
-                    await hangmanModule.handleHangmanInteraction(interaction);
-                }
-                // 🧠 Memory Match (بطاقات التطابق)
-                else if (id.startsWith('memory_')) {
-                    await memoryModule.handleMemoryInteraction(interaction);
-                }
-                // 🧾e Math (إجابات متعددة)
-                else if (id.startsWith('math_')) {
-                    await mathModule.handleMathInteraction(interaction);
-                }
-                // 🔮 Fortune
-                else if (id.startsWith('fortune_')) {
-                    await funButtons.fortune.handleFortuneInteraction(interaction);
-                }
-                // 🤔 WYR (هل تفضل)
-                else if (id.startsWith('wyr_')) {
-                    await funButtons.wyr.handleWYRInteraction(interaction);
-                }
-                // 💘 Ship (توافق)
-                else if (id.startsWith('ship_')) {
-                    await funButtons.ship.handleShipInteraction(interaction);
-                }
-                // 🎲 Roll (نرد)
-                else if (id.startsWith('roll_')) {
-                    await funButtons.roll.handleRollInteraction(interaction);
-                }
-                // 🔮 8ball
-                else if (id.startsWith('ball_')) {
-                    await funButtons.ball.handleBallInteraction(interaction);
-                }
-                // 💹 Market (سوق)
-                else if (id.startsWith('market_') || id.startsWith('mkt_')) {
-                    if (marketModule.handleMarketInteraction) await marketModule.handleMarketInteraction(interaction);
-                }
-                // 🎯 Mini-Games
-                else if (id.startsWith('mg_')) {
-                    // معالجة أزرار الألعاب المصغرة من القائمة الرئيسية
-                    if (id === 'mg_bomb') {
-                        await minigamesModule.execute(interaction.message, ['bomb']);
-                    } else if (id === 'mg_speed') {
-                        await minigamesModule.execute(interaction.message, ['speed']);
-                    } else if (id === 'mg_chain') {
-                        await minigamesModule.execute(interaction.message, ['chain']);
-                    }
-                }
-                // 🏅 Achievements
-                else if (id.startsWith('ach_')) {
-                    if (achievementsModule.handleAchievementsInteraction) {
-                        await achievementsModule.handleAchievementsInteraction(interaction);
-                    }
-                }
-                // 📊 Analytics
-                else if (id.startsWith('analytics_') || id.startsWith('anal_')) {
-                    if (analyticsModule.handleAnalyticsInteraction) {
-                        await analyticsModule.handleAnalyticsInteraction(interaction);
-                    }
-                }
-                // Punishments buttons
-                else if (id.startsWith('remove_')) {
-                    await punishmentsUtils.handlePunishmentButton(interaction);
-                }
-                // Shop buy buttons
-                else if (id.startsWith('buy_')) {
-                    await economyModule.handleShopButton(interaction);
-                }
-                // Property buttons
-                else if (id.startsWith('prop_')) {
-                    const propertyModule = require('../commands/economy/property');
-                    await propertyModule.handlePropertyInteraction(interaction);
-                }
-                // Help buttons/menus
-                else if (id.startsWith('help_')) {
-                    await helpModule.handleHelpInteraction(interaction);
-                }
-                // Trivia difficulty buttons
-                else if (id.startsWith('trivia_diff_')) {
-                    await triviaModule.handleTriviaInteraction(interaction);
-                }
-                // Casino Blackjack buttons
-                else if (id.startsWith('bj_')) {
-                    await casinoAdvancedModule.handleBlackjackButton(interaction);
-                }
-                // Color roles buttons
-                else if (id.startsWith('colorole_')) {
-                    await colorRoles.handleColorButton(interaction);
-                }
-                // Clan buttons
-                else if (id === 'clan_create_btn') {
-                    await clans.showCreateModal(interaction);
-                } else if (id === 'clan_my_dashboard') {
-                    await clans.showDashboard_interaction(interaction);
-                } else if (id === 'clan_list_btn') {
-                    await clans.showClanList(interaction);
-                } else if (id === 'clan_invite_btn') {
-                    await clans.handleInviteButton(interaction);
-                } else if (id === 'clan_leave_btn') {
-                    await clans.handleLeave(interaction);
-                } else if (id === 'clan_delete_btn') {
-                    await clans.handleDissolve(interaction);
-                } else if (id === 'clan_confirm_delete') {
-                    await clans.handleConfirmDissolve(interaction);
-                } else if (id === 'clan_cancel_delete') {
-                    await interaction.update({ content: '❌ تم إلغاء العملية.', components: [] });
-                } else if (id === 'clan_kick_btn') {
-                    await clans.handleKickButton(interaction);
-                } else if (id === 'clan_desc_btn') {
-                    await clans.handleDescButton(interaction);
-                } else if (id === 'clan_rename_btn') {
-                    await clans.handleRenameButton(interaction, null);
-                } else if (id.startsWith('clan_rename_')) {
-                    const clanId = id.replace('clan_rename_', '');
-                    await clans.handleRenameButton(interaction, clanId);
-                } else if (id.startsWith('clan_settings_')) {
-                    await interaction.reply({ content: '🛠️ إعدادات الكلان (قريباً)...', ephemeral: true });
-                } else if (id.startsWith('clan_members_')) {
-                    await interaction.reply({ content: '👥 قائمة الأعضاء — استخدم أمر `كلان` لرؤيتها.', ephemeral: true });
-                } else if (id === 'clan_edit_rank_btn') {
-                    await clans.handleEditRankButton(interaction);
-                } else if (id.startsWith('clan:')) {
-                    // تنسيق: clan:accept:clanId:guildId:rank  أو  clan:reject:clanId:guildId
-                    const parts = id.split(':');
-                    const action = parts[1];
-                    const clanId = parts[2];
-                    const guildId = parts[3];
-                    const rank = parts[4] || 'member';
-                    await clans.handleInviteResponse(interaction, action, clanId, guildId, rank);
-                }
-                // Status buttons
-                else if (id.startsWith('status_btn_')) {
-                    await ownerCommands.handleStatusInteraction(interaction);
-                }
-                // Menu buttons (economy, games, social, admin, profile, help, refresh)
-                else if (id.startsWith('menu_')) {
-                    await menuModule.handleMenuInteraction(interaction);
-                }
-                // eco_leaderboard — يُعالَج دائماً بواسطة ecoHub سواء جاء من القائمة أو اللوحة
-                else if (id === 'eco_leaderboard') {
-                    await ecoHub.handleEcoButton(interaction);
-                }
-                // Economy dashboard buttons
-                else if (id.startsWith('econ_')) {
-                    await balanceModule.handleEconomyInteraction(interaction);
-                }
-                // Admin buttons (both legacy admin_ and new adm_)
-                else if (id.startsWith('admin_') || id.startsWith('adm_')) {
-                    await adminPanelModule.handleAdminInteraction(interaction);
-                }
-                // Profile buttons (handled by collector inside profile.js)
-                else if (id.startsWith('prof_')) {
-                    // Collector قد يكون انتهت مدته — نرد بصمت لمنع "This interaction failed"
-                    if (!interaction.replied && !interaction.deferred) {
-                        await interaction.reply({
-                            content: '⌛ انتهت مدة هذه الجلسة. اكتب `بروفايل` من جديد لعرض ملفك الشخصي.',
-                            ephemeral: true
-                        }).catch(() => {});
-                    }
-                }
-                // Owner Dashboard buttons
-                else if (id.startsWith('owner_')) {
-                    await ownerDashboard.handleOwnerInteraction(interaction);
-                }
-                // Games Hub buttons (game_ / flip_)
-                else if (id.startsWith('game_') || id.startsWith('flip_') || id === 'games_back') {
-                    await gamesHub.handleGameButton(interaction);
-                }
-                // Economy Hub buttons (eco_)
-                else if (id.startsWith('eco_')) {
-                    await ecoHub.handleEcoButton(interaction);
-                }
-                // Shop buttons (sbuy_, shop_page_, shop_inv, shop_, buy_)
-                else if (id.startsWith('sbuy_') || id.startsWith('shop_') || id.startsWith('buy_') || id === 'shop_inv') {
-                    await economyModule.handleShopButton(interaction);
-                }
-                // 🏆 Leaderboard buttons (lb_)
-                else if (id.startsWith('lb_')) {
-                    const lbModule = require('../commands/main/leaderboard');
-                    await lbModule.handleLeaderboardButton(interaction);
-                }
-                // Company buttons (must come LAST to not conflict with clan_)
-                else if (id.startsWith('comp_')) {
-                    await companyModule.handleCompanyInteraction(interaction);
-                }
-                // 🎁 Daily buttons
-                else if (id.startsWith('daily_')) {
-                    if (dailyModule.handleDailyInteraction) await dailyModule.handleDailyInteraction(interaction);
-                }
-                // 💼 Work buttons
-                else if (id.startsWith('work_')) {
-                    if (workModule.handleWorkInteraction) await workModule.handleWorkInteraction(interaction);
-                }
-                // 💍 Marry / Divorce buttons
-                else if (id.startsWith('marry_') || id.startsWith('married_')) {
-                    if (marryModule.handleMarryInteraction) await marryModule.handleMarryInteraction(interaction);
-                }
-                // 🔨 Moderation confirmation buttons (ban/kick/warn/mute)
-                // تنسيق الـ customId: mod_confirm_type_targetId_authorId
-                else if (id.startsWith('mod_confirm_') || id.startsWith('mod_cancel_')) {
-                    await modButtonsModule.handleModButton(interaction);
-                }
-                // Guide navigation buttons
-                else if (id.startsWith('guide_')) {
-                    // The eco panel button 'guide_economy' opens the panel
-                    if (id === 'guide_economy') {
-                        const panel = await ecoHub.buildMainPanel(interaction.user.id, interaction.client);
-                        await interaction.update({ ...panel });
-                    } else {
-                        // أزرار الـ guide الأخرى (prev/next/page) — collector قد انتهى
-                        if (!interaction.replied && !interaction.deferred) {
-                            await interaction.reply({
-                                content: '⌛ انتهت مدة هذه الجلسة. اكتب الأمر من جديد.',
-                                ephemeral: true
-                            }).catch(() => {});
-                        }
-                    }
-                }
-                // Silently ignore expired/handled-externally buttons
-                else if (id === 'fast_click_gift' || id.startsWith('ignore_')) {
-                    // أزرار مُهمَلة — نرد بصمت لمنع "This interaction failed"
-                    if (!interaction.replied && !interaction.deferred) {
-                        await interaction.deferUpdate().catch(() => {});
-                    }
-                }
-                else {
-                    // زر غير معروف — نرد بصمت لمنع "This interaction failed"
-                    if (!interaction.replied && !interaction.deferred) {
-                        await interaction.reply({
-                            content: '⚙️ هذا الزر لا يعمل في الوقت الحالي.',
-                            ephemeral: true
-                        }).catch(() => {});
-                    }
-                }
+                await _handleButton(interaction);
+                return;
             }
 
         } catch (error) {
-            // خطأ 10062 = Unknown Interaction (انتهت صلاحية الـ interaction) — تجاهله بصمت
+            // خطأ 10062 = Unknown Interaction (انتهت صلاحيتها) — تجاهل بصمت
             if (error.code === 10062) return;
 
-            console.error('[Interaction Handler Error]:', error);
-            if (!interaction.replied && !interaction.deferred) {
-                try {
-                    await interaction.reply({
-                        content: `❌ حدث خطأ غير متوقع. حاول مرة أخرى.`,
-                        ephemeral: true
-                    });
-                } catch (e) { /* Already replied or expired */ }
+            console.error('[InteractionCreate] ❌ خطأ:', error.message, '| ID:', interaction.customId ?? interaction.commandName ?? '?');
+
+            // رد بالخطأ إذا لم يتم الرد بعد
+            _safeReplyError(interaction, `❌ حدث خطأ غير متوقع. حاول مرة أخرى.`);
+        }
+    },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MODAL HANDLER
+// ─────────────────────────────────────────────────────────────────────────────
+async function _handleModal(interaction) {
+    const id = interaction.customId;
+
+    // Quick Room modals
+    if (id.startsWith('quickroom_modal_')) {
+        const m = _require('../commands/moderation/room-creator');
+        return m?.handleQuickRoomModal(interaction);
+    }
+
+    // Clan modals
+    if (id === 'clan_create_modal') return _require('../commands/social/clans')?.handleCreateSubmit(interaction);
+    if (id === 'clan_invite_modal') return _require('../commands/social/clans')?.handleInviteSubmit(interaction);
+    if (id === 'clan_kick_modal')   return _require('../commands/social/clans')?.handleKickSubmit(interaction);
+    if (id === 'clan_editrank_modal') return _require('../commands/social/clans')?.handleEditRankModalSubmit(interaction);
+    if (id.startsWith('clan_desc_modal_')) {
+        const clanId = id.replace('clan_desc_modal_', '');
+        return _require('../commands/social/clans')?.handleDescSubmit(interaction, clanId);
+    }
+    if (id.startsWith('clan_rename_modal_')) {
+        const clanId = id.replace('clan_rename_modal_', '');
+        return _require('../commands/social/clans')?.handleRenameSubmit(interaction, clanId);
+    }
+
+    // Economy Hub modals
+    if (['eco_deposit_modal','eco_withdraw_modal','eco_transfer_modal','eco_vault_deposit_modal','eco_vault_withdraw_modal'].includes(id)) {
+        return _require('../commands/economy/economy-hub')?.handleEcoModal(interaction);
+    }
+
+    // Status modals
+    if (id.startsWith('status_modal_')) {
+        return _require('../commands/main/status')?.handleStatusInteraction(interaction);
+    }
+
+    // Economy modals (legacy econ_)
+    if (id.startsWith('econ_')) {
+        const m = _require('../commands/economy/balance');
+        return m?.handleEconomyModal?.(interaction);
+    }
+
+    // Admin modals
+    if (id.startsWith('admin_') || id.startsWith('adm_')) {
+        return _require('../commands/moderation/panel')?.handleAdminModal(interaction);
+    }
+
+    // Owner dashboard modals
+    if (id.startsWith('owner_')) {
+        return _require('../commands/main/owner-dashboard')?.handleOwnerModal(interaction);
+    }
+
+    // Company modals
+    if (id.startsWith('comp_')) {
+        return _require('../commands/economy/company')?.handleCompanyModal(interaction);
+    }
+
+    // Modal غير معروف — رد بصمت
+    if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({ content: '⚙️ هذا النموذج لا يعمل حالياً.', ephemeral: true }).catch(() => {});
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SELECT MENU HANDLER
+// ─────────────────────────────────────────────────────────────────────────────
+async function _handleSelectMenu(interaction) {
+    const id = interaction.customId;
+
+    if (id.startsWith('clan_rank_select_')) {
+        const targetId = id.replace('clan_rank_select_', '');
+        return _require('../commands/social/clans')?.handleRankSelection(interaction, targetId);
+    }
+    if (id.startsWith('clan_invite_rank_')) {
+        const raw = id.replace('clan_invite_rank_', '');
+        const [clanId, targetId, guildId] = raw.split('|');
+        return _require('../commands/social/clans')?.handleInviteRankSelect(interaction, clanId, targetId, guildId);
+    }
+    if (id === 'trivia_topic_select') {
+        return _require('../commands/games/trivia')?.handleTriviaInteraction(interaction);
+    }
+    if (id === 'help_select_category') {
+        return _require('../commands/main/help')?.handleHelpInteraction(interaction);
+    }
+
+    // Select غير معروف
+    if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({ content: '⚙️ هذه القائمة لا تعمل حالياً.', ephemeral: true }).catch(() => {});
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BUTTON HANDLER
+// ─────────────────────────────────────────────────────────────────────────────
+async function _handleButton(interaction) {
+    const id = interaction.customId;
+
+    // 🏠 Room Creator
+    if (id.startsWith('room_') || id.startsWith('quickroom_')) {
+        return _require('../commands/moderation/room-creator')?.handleRoomInteraction(interaction);
+    }
+
+    // 🗳️ Poll
+    if (id.startsWith('poll_')) {
+        return _require('../commands/social/poll')?.handlePollInteraction(interaction);
+    }
+
+    // 🎨 Color roles — موحّد (color_btn_ و color_)
+    if (id.startsWith('color_btn_')) {
+        const colorName = id.replace('color_btn_', '');
+        return _require('../commands/moderation/color-roles')?.assignColorRole(interaction, colorName);
+    }
+    if (id.startsWith('color_') && !id.startsWith('colorole_')) {
+        const colorName = id.replace('color_', '');
+        return _require('../commands/moderation/color-roles')?.assignColorRole(interaction, colorName);
+    }
+
+    // ✅ Server Setup — يُدار بـ collector داخل server-setup.js
+    // إذا وصل هنا يعني الـ collector انتهى → نرد بصمت
+    if (id === 'setup_confirm' || id === 'setup_cancel') {
+        if (!interaction.replied && !interaction.deferred) {
+            await interaction.deferUpdate().catch(() => {});
+        }
+        return;
+    }
+
+    // 🤖 Bot guide
+    if (id.startsWith('bot_guide_')) {
+        const guides = {
+            'bot_guide_economy': '💰 **الاقتصاد:** `رصيد` `يومي` `عمل` `متجر` `استثمار` `بنك` `تحويل @شخص`',
+            'bot_guide_games':   '🎮 **الألعاب:** `xo @شخص` `رحجة @شخص` `تريفيا` `كازينو` `العاب`',
+            'bot_guide_rooms':   '🏠 **الغرف:** `غرفة جديدة [اسم] [لعبة]` `غرف` `غرفتي` `حذف غرفة`',
+            'bot_guide_ai':      '🧠 **الذكاء الاصطناعي:** منشن البوت في أي رسالة وسيرد عليك فوراً! يتذكر محادثاتك ويتعلم منها.',
+        };
+        if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({ content: guides[id] || '❓ غير معروف', ephemeral: true }).catch(() => {});
+        }
+        return;
+    }
+
+    // ❌⭕ Tic-Tac-Toe
+    if (id.startsWith('ttt_')) {
+        return _require('../commands/games/ttt')?.handleTicTacToeInteraction(interaction);
+    }
+
+    // 🪨📄✂️ Rock Paper Scissors
+    if (id.startsWith('rps_')) {
+        return _require('../commands/games/rps')?.handleRPSInteraction(interaction);
+    }
+
+    // 😵 Hangman
+    if (id.startsWith('hangman_')) {
+        return _require('../commands/games/hangman')?.handleHangmanInteraction(interaction);
+    }
+
+    // 🧠 Memory Match
+    if (id.startsWith('memory_')) {
+        return _require('../commands/games/memory')?.handleMemoryInteraction(interaction);
+    }
+
+    // ➕ Math
+    if (id.startsWith('math_')) {
+        return _require('../commands/games/math')?.handleMathInteraction(interaction);
+    }
+
+    // 🔮 Fortune
+    if (id.startsWith('fortune_')) {
+        return _require('../commands/fun/fun-buttons')?.fortune?.handleFortuneInteraction(interaction);
+    }
+
+    // 🤔 Would You Rather
+    if (id.startsWith('wyr_')) {
+        return _require('../commands/fun/fun-buttons')?.wyr?.handleWYRInteraction(interaction);
+    }
+
+    // 💘 Ship
+    if (id.startsWith('ship_')) {
+        return _require('../commands/fun/fun-buttons')?.ship?.handleShipInteraction(interaction);
+    }
+
+    // 🎲 Roll
+    if (id.startsWith('roll_')) {
+        return _require('../commands/fun/fun-buttons')?.roll?.handleRollInteraction(interaction);
+    }
+
+    // 🔮 8ball
+    if (id.startsWith('ball_')) {
+        return _require('../commands/fun/fun-buttons')?.ball?.handleBallInteraction(interaction);
+    }
+
+    // 💹 Market
+    if (id.startsWith('market_') || id.startsWith('mkt_')) {
+        const m = _require('../commands/economy/market');
+        return m?.handleMarketInteraction?.(interaction);
+    }
+
+    // 🎯 Mini-Games (من القائمة الرئيسية)
+    if (id.startsWith('mg_')) {
+        const minigames = _require('../commands/games/minigames');
+        if (!minigames) return _safeAck(interaction);
+        if (id === 'mg_bomb')  return minigames.execute(interaction.message, ['bomb']);
+        if (id === 'mg_speed') return minigames.execute(interaction.message, ['speed']);
+        if (id === 'mg_chain') return minigames.execute(interaction.message, ['chain']);
+        return _safeAck(interaction);
+    }
+
+    // 🏅 Achievements
+    if (id.startsWith('ach_')) {
+        const m = _require('../commands/main/achievements-cmd');
+        return m?.handleAchievementsInteraction?.(interaction);
+    }
+
+    // 📊 Analytics
+    if (id.startsWith('analytics_') || id.startsWith('anal_')) {
+        const m = _require('../commands/main/analytics');
+        return m?.handleAnalyticsInteraction?.(interaction);
+    }
+
+    // Punishments
+    if (id.startsWith('remove_')) {
+        return _require('../utils/punishments')?.handlePunishmentButton(interaction);
+    }
+
+    // Shop buy buttons (قبل أزرار shop_ العامة)
+    if (id.startsWith('buy_')) {
+        return _require('../commands/economy/shop')?.handleShopButton(interaction);
+    }
+
+    // Property
+    if (id.startsWith('prop_')) {
+        return _require('../commands/economy/property')?.handlePropertyInteraction(interaction);
+    }
+
+    // Help
+    if (id.startsWith('help_')) {
+        return _require('../commands/main/help')?.handleHelpInteraction(interaction);
+    }
+
+    // Trivia difficulty
+    if (id.startsWith('trivia_diff_')) {
+        return _require('../commands/games/trivia')?.handleTriviaInteraction(interaction);
+    }
+
+    // Casino Blackjack
+    if (id.startsWith('bj_')) {
+        return _require('../commands/economy/casino')?.handleBlackjackButton(interaction);
+    }
+
+    // Color roles (colorole_)
+    if (id.startsWith('colorole_')) {
+        return _require('../commands/moderation/color-roles')?.handleColorButton(interaction);
+    }
+
+    // Clan buttons
+    if (id.startsWith('clan:')) {
+        const parts = id.split(':');
+        const [, action, clanId, guildId, rank = 'member'] = parts;
+        return _require('../commands/social/clans')?.handleInviteResponse(interaction, action, clanId, guildId, rank);
+    }
+    if (id.startsWith('clan_')) {
+        return _handleClanButton(interaction, id);
+    }
+
+    // Status buttons (owner)
+    if (id.startsWith('status_btn_')) {
+        return _require('../commands/main/status')?.handleStatusInteraction(interaction);
+    }
+
+    // Menu buttons
+    if (id.startsWith('menu_')) {
+        return _require('../commands/main/menu')?.handleMenuInteraction(interaction);
+    }
+
+    // Economy leaderboard standalone
+    if (id === 'eco_leaderboard') {
+        return _require('../commands/economy/economy-hub')?.handleEcoButton(interaction);
+    }
+
+    // Economy dashboard (econ_)
+    if (id.startsWith('econ_')) {
+        return _require('../commands/economy/balance')?.handleEconomyInteraction(interaction);
+    }
+
+    // Admin buttons
+    if (id.startsWith('admin_') || id.startsWith('adm_')) {
+        return _require('../commands/moderation/panel')?.handleAdminInteraction(interaction);
+    }
+
+    // Profile — يُدار بـ collector، إذا وصل هنا الجلسة انتهت
+    if (id.startsWith('prof_')) {
+        if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({
+                content: '⌛ انتهت مدة هذه الجلسة. اكتب `بروفايل` من جديد لعرض ملفك الشخصي.',
+                ephemeral: true
+            }).catch(() => {});
+        }
+        return;
+    }
+
+    // Owner Dashboard
+    if (id.startsWith('owner_')) {
+        return _require('../commands/main/owner-dashboard')?.handleOwnerInteraction(interaction);
+    }
+
+    // Games Hub
+    if (id.startsWith('game_') || id.startsWith('flip_') || id === 'games_back') {
+        return _require('../commands/games/games-hub')?.handleGameButton(interaction);
+    }
+
+    // Economy Hub (eco_)
+    if (id.startsWith('eco_')) {
+        return _require('../commands/economy/economy-hub')?.handleEcoButton(interaction);
+    }
+
+    // Shop (sbuy_, shop_, buy_ handled above)
+    if (id.startsWith('sbuy_') || id.startsWith('shop_') || id === 'shop_inv') {
+        return _require('../commands/economy/shop')?.handleShopButton(interaction);
+    }
+
+    // Leaderboard
+    if (id.startsWith('lb_')) {
+        return _require('../commands/main/leaderboard')?.handleLeaderboardButton(interaction);
+    }
+
+    // Company
+    if (id.startsWith('comp_')) {
+        return _require('../commands/economy/company')?.handleCompanyInteraction(interaction);
+    }
+
+    // Daily
+    if (id.startsWith('daily_')) {
+        const m = _require('../commands/economy/daily');
+        return m?.handleDailyInteraction?.(interaction);
+    }
+
+    // Work
+    if (id.startsWith('work_')) {
+        const m = _require('../commands/economy/work');
+        return m?.handleWorkInteraction?.(interaction);
+    }
+
+    // Marry / Divorce
+    if (id.startsWith('marry_') || id.startsWith('married_')) {
+        const m = _require('../commands/social/marry');
+        return m?.handleMarryInteraction?.(interaction);
+    }
+
+    // Moderation confirmation (mod_confirm_, mod_cancel_)
+    if (id.startsWith('mod_confirm_') || id.startsWith('mod_cancel_')) {
+        return _require('../commands/moderation/mod-buttons')?.handleModButton(interaction);
+    }
+
+    // Guide navigation
+    if (id.startsWith('guide_')) {
+        if (id === 'guide_economy') {
+            const ecoHub = _require('../commands/economy/economy-hub');
+            if (ecoHub) {
+                const panel = await ecoHub.buildMainPanel(interaction.user.id, interaction.client);
+                if (!interaction.replied && !interaction.deferred) {
+                    return interaction.reply({ ...panel, ephemeral: false }).catch(() => {});
+                } else {
+                    return interaction.editReply({ ...panel }).catch(() => {});
+                }
             }
         }
+        // Guide جلسة انتهت
+        if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({ content: '⌛ انتهت مدة هذه الجلسة. اكتب الأمر من جديد.', ephemeral: true }).catch(() => {});
+        }
+        return;
     }
-};
+
+    // Fastest Clicker gift — يُدار بـ collector في random-interactions.js
+    if (id === 'fast_click_gift' || id.startsWith('ignore_')) {
+        await _safeAck(interaction);
+        return;
+    }
+
+    // ── زر غير معروف ─────────────────────────────────────────────────────────
+    if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({ content: '⚙️ هذا الزر لا يعمل في الوقت الحالي.', ephemeral: true }).catch(() => {});
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CLAN BUTTON SUB-HANDLER
+// ─────────────────────────────────────────────────────────────────────────────
+async function _handleClanButton(interaction, id) {
+    const clans = _require('../commands/social/clans');
+    if (!clans) return _safeAck(interaction);
+
+    if (id === 'clan_create_btn')        return clans.showCreateModal(interaction);
+    if (id === 'clan_my_dashboard')      return clans.showDashboard_interaction(interaction);
+    if (id === 'clan_list_btn')          return clans.showClanList(interaction);
+    if (id === 'clan_invite_btn')        return clans.handleInviteButton(interaction);
+    if (id === 'clan_leave_btn')         return clans.handleLeave(interaction);
+    if (id === 'clan_delete_btn')        return clans.handleDissolve(interaction);
+    if (id === 'clan_confirm_delete')    return clans.handleConfirmDissolve(interaction);
+    if (id === 'clan_kick_btn')          return clans.handleKickButton(interaction);
+    if (id === 'clan_desc_btn')          return clans.handleDescButton(interaction);
+    if (id === 'clan_edit_rank_btn')     return clans.handleEditRankButton(interaction);
+    if (id === 'clan_rename_btn')        return clans.handleRenameButton(interaction, null);
+    if (id === 'clan_cancel_delete') {
+        if (!interaction.replied && !interaction.deferred) {
+            return interaction.reply({ content: '❌ تم إلغاء العملية.', ephemeral: true }).catch(() => {});
+        }
+        return;
+    }
+    if (id.startsWith('clan_rename_')) {
+        const clanId = id.replace('clan_rename_', '');
+        return clans.handleRenameButton(interaction, clanId);
+    }
+    if (id.startsWith('clan_settings_') || id.startsWith('clan_members_')) {
+        if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({ content: '🛠️ هذا الخيار قيد التطوير...', ephemeral: true }).catch(() => {});
+        }
+        return;
+    }
+
+    // clan_ غير معروف
+    await _safeAck(interaction);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** رد صامت لمنع "This interaction failed" */
+async function _safeAck(interaction) {
+    try {
+        if (!interaction.replied && !interaction.deferred) {
+            await interaction.deferUpdate();
+        }
+    } catch { /* تجاهل أخطاء 10062 وما شابه */ }
+}
+
+/** رد بخطأ إذا لم يُرد بعد */
+async function _safeReplyError(interaction, msg) {
+    try {
+        if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({ content: msg, ephemeral: true });
+        } else if (interaction.deferred) {
+            await interaction.editReply({ content: msg });
+        }
+    } catch { /* تجاهل إذا انتهت صلاحية الـ interaction */ }
+}
