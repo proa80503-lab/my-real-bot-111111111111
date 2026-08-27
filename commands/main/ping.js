@@ -15,9 +15,9 @@ let analytics = null;
 try { analytics = require('../../utils/analytics'); } catch {}
 
 module.exports = {
-    name: aliases: ['بينج', 'latency', 'اختبار', ],
+    name: 'ping', aliases: ['بينج', 'latency', 'اختبار', ],
     description: 'فحص سرعة البوت والخوادم',
-    usage: async execute(message) {
+    async execute(message) {
         const startTime = Date.now();
 
         const loadingEmbed = new EmbedBuilder()
