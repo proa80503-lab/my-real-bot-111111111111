@@ -377,7 +377,7 @@ async function checkAchievements(userId, action, data = {}, message = null) {
 
 // ─── أمر عرض الإنجازات ───────────────────────────────────────────────────────
 module.exports = {
-    name: aliases: ['انجازات', 'إنجازات', 'medals', 'ميداليات'],
+    name: 'achievements', aliases: ['انجازات', 'إنجازات', 'medals', 'ميداليات'],
     description: 'عرض إنجازاتك وتقدمك',
     usage: 'انجازات [@مستخدم]',
 
