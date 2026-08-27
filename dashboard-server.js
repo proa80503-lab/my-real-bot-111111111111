@@ -520,48 +520,69 @@ code,.uid{font-family:var(--mono);background:rgba(88,101,242,.12);border-radius:
     <h2 class="stitle">🛠️ التحكم الشامل في البوت</h2>
     
     <div class="info-g">
-      <!-- الردود التلقائية -->
+      <!-- إعدادات النظام الحية -->
       <div class="ic">
-        <h3>💬 إضافة رد تلقائي</h3>
+        <h3>⚙️ إعدادات البوت الحية (Intervals & Features)</h3>
         <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px;">
-          <input type="text" id="ar-trigger" class="url-input" placeholder="الكلمة (مثال: السلام عليكم)">
-          <input type="text" id="ar-response" class="url-input" placeholder="الرد (مثال: وعليكم السلام)">
-          <label style="font-size:12px;color:var(--muted)"><input type="checkbox" id="ar-exact"> مطابقة الكلمة بالضبط فقط</label>
-          <button class="btn success" onclick="submitForm('/api/control/response', { trigger: document.getElementById('ar-trigger').value, response: document.getElementById('ar-response').value, exactMatch: document.getElementById('ar-exact').checked }, 'تمت إضافة الرد!')">➕ إضافة الرد</button>
-        </div>
-      </div>
-
-      <!-- إعدادات النظام -->
-      <div class="ic">
-        <h3>⚙️ إعدادات البوت الحية</h3>
-        <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px;">
-          <button class="btn" style="background:var(--accent)" onclick="submitForm('/api/control/settings', { autoMessagesEnabled: true }, 'تم تفعيل الرسائل التلقائية')">✅ تفعيل الرسائل التلقائية (AI, نكت...)</button>
-          <button class="btn danger" onclick="submitForm('/api/control/settings', { autoMessagesEnabled: false }, 'تم تعطيل الرسائل التلقائية')">❌ تعطيل الرسائل التلقائية</button>
+          <label>تفعيل الرسائل التلقائية: <select id="set-auto-msg" class="url-input"><option value="true">مفعل</option><option value="false">معطل</option></select></label>
+          <label>المنشن الوهمي: <select id="set-ghost-ping" class="url-input"><option value="true">مفعل</option><option value="false">معطل</option></select></label>
+          <label>فاصل الأحداث العشوائية (دقائق): <input type="number" id="set-rnd-int" class="url-input" placeholder="مثال: 20"></label>
+          <label>فاصل التحديات (دقائق): <input type="number" id="set-chal-int" class="url-input" placeholder="مثال: 45"></label>
+          <label>فاصل رسائل المزاج (دقائق): <input type="number" id="set-mood-int" class="url-input" placeholder="مثال: 180"></label>
+          <label>تكرار الرد التلقائي AI (لكل x رسالة): <input type="number" id="set-ai-freq" class="url-input" placeholder="مثال: 10"></label>
           
-          <button class="btn" style="background:var(--purple)" onclick="submitForm('/api/control/settings', { ghostPingEnabled: true }, 'تم تفعيل المنشن الوهمي')">👻 تفعيل المنشن الوهمي</button>
-          <button class="btn danger" onclick="submitForm('/api/control/settings', { ghostPingEnabled: false }, 'تم تعطيل المنشن الوهمي')">🚫 تعطيل المنشن الوهمي</button>
+          <button class="btn success" onclick="saveSettings()">💾 حفظ الإعدادات</button>
         </div>
       </div>
 
-      <!-- إرسال هدية -->
+      <!-- الإدارة الشاملة للأوامر -->
       <div class="ic">
-        <h3>🎁 إرسال هدية لعضو</h3>
+        <h3>⛔ الإدارة السريعة للأوامر</h3>
         <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px;">
-          <input type="text" id="gift-userId" class="url-input" placeholder="ID المستخدم">
-          <input type="number" id="gift-amount" class="url-input" placeholder="المبلغ (مثال: 10000)">
-          <button class="btn" style="background:var(--purple)" onclick="submitForm('/api/control/gift', { userId: document.getElementById('gift-userId').value, amount: Number(document.getElementById('gift-amount').value) }, 'تم إرسال الهدية!')">💸 إرسال الهدية</button>
-        </div>
-      </div>
-
-      <!-- إيقاف الأوامر -->
-      <div class="ic">
-        <h3>⛔ تعطيل الأوامر</h3>
-        <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px;">
-          <input type="text" id="cmd-name" class="url-input" placeholder="اسم الأمر (مثال: casino)">
+          <select id="cmd-name" class="url-input">
+            <option value="" disabled selected>-- اختر أمراً من القائمة --</option>
+            ${Object.values(s.cmdStats).flat().map(c => {
+                const cmdName = c.replace('.js', '');
+                const isDis = botSettings.isCommandDisabled(cmdName) ? ' (معطل ❌)' : '';
+                return '<option value="' + cmdName + '">' + cmdName + isDis + '</option>';
+            }).join('')}
+          </select>
           <div style="display:flex;gap:10px;">
             <button class="btn danger" style="flex:1" onclick="submitForm('/api/control/command', { action: 'disable', command: document.getElementById('cmd-name').value }, 'تم تعطيل الأمر!')">تعطيل</button>
             <button class="btn success" style="flex:1" onclick="submitForm('/api/control/command', { action: 'enable', command: document.getElementById('cmd-name').value }, 'تم تفعيل الأمر!')">تفعيل</button>
           </div>
+        </div>
+      </div>
+
+      <!-- الإدارة الشاملة للاقتصاد -->
+      <div class="ic">
+        <h3>💰 إدارة الاقتصاد</h3>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px;">
+          <input type="text" id="eco-userId" class="url-input" placeholder="ID المستخدم">
+          <input type="number" id="eco-amount" class="url-input" placeholder="المبلغ (مثال: 50000)">
+          <select id="eco-action" class="url-input">
+            <option value="add">➕ إضافة رصيد</option>
+            <option value="remove">➖ خصم رصيد</option>
+            <option value="set">✏️ تعيين الرصيد (تصفير أو تحديد)</option>
+          </select>
+          <button class="btn" style="background:var(--yellow);color:#000" onclick="manageEconomy()">💾 تنفيذ العملية المالية</button>
+        </div>
+      </div>
+
+      <!-- نظام الإشراف (Moderation) -->
+      <div class="ic">
+        <h3>🛡️ الإشراف والعقوبات (Moderation)</h3>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px;">
+          <input type="text" id="mod-guildId" class="url-input" placeholder="ID السيرفر (مطلوب للطرد/الحظر)">
+          <input type="text" id="mod-userId" class="url-input" placeholder="ID المستخدم">
+          <input type="text" id="mod-reason" class="url-input" placeholder="السبب (اختياري)">
+          <select id="mod-action" class="url-input">
+            <option value="warn">⚠️ توجيه إنذار (قاعدة البيانات)</option>
+            <option value="kick">👢 طرد (Kick)</option>
+            <option value="ban">🔨 حظر (Ban)</option>
+            <option value="unban">🕊️ فك حظر (Unban)</option>
+          </select>
+          <button class="btn" style="background:var(--red)" onclick="manageModeration()">🚨 تنفيذ العقوبة</button>
         </div>
       </div>
 
@@ -584,8 +605,41 @@ code,.uid{font-family:var(--mono);background:rgba(88,101,242,.12);border-radius:
         </div>
       </div>
     </div>
-    
     <script>
+    function saveSettings() {
+      const data = {};
+      const am = document.getElementById('set-auto-msg').value;
+      const gp = document.getElementById('set-ghost-ping').value;
+      const rInt = document.getElementById('set-rnd-int').value;
+      const cInt = document.getElementById('set-chal-int').value;
+      const mInt = document.getElementById('set-mood-int').value;
+      const aiFreq = document.getElementById('set-ai-freq').value;
+
+      if(am) data.autoMessagesEnabled = (am === 'true');
+      if(gp) data.ghostPingEnabled = (gp === 'true');
+      if(rInt) data.randomEventInterval = Number(rInt);
+      if(cInt) data.challengeInterval = Number(cInt);
+      if(mInt) data.moodMessageInterval = Number(mInt);
+      if(aiFreq) data.aiRandomReplyFrequency = Number(aiFreq);
+
+      submitForm('/api/control/settings', data, 'تم حفظ إعدادات النظام بنجاح!');
+    }
+
+    function manageEconomy() {
+      const userId = document.getElementById('eco-userId').value;
+      const amount = document.getElementById('eco-amount').value;
+      const action = document.getElementById('eco-action').value;
+      submitForm('/api/control/economy_manage', { userId, amount, action }, 'تم تنفيذ العملية المالية بنجاح!');
+    }
+
+    function manageModeration() {
+      const guildId = document.getElementById('mod-guildId').value;
+      const userId = document.getElementById('mod-userId').value;
+      const reason = document.getElementById('mod-reason').value;
+      const action = document.getElementById('mod-action').value;
+      submitForm('/api/control/moderation', { guildId, userId, reason, action }, 'تم تنفيذ إجراء الإشراف بنجاح!');
+    }
+
     async function submitForm(url, data, successMsg) {
       if(!data) return;
       try {
@@ -686,15 +740,70 @@ const server = http.createServer(async (req, res) => {
         
         if (urlPath === '/api/control/settings') {
             const botSettings = require('./utils/bot-settings');
-            if (body.autoMessagesEnabled !== undefined) {
-                botSettings.set('autoMessagesEnabled', !!body.autoMessagesEnabled);
-            }
+            if (body.autoMessagesEnabled !== undefined) botSettings.set('autoMessagesEnabled', !!body.autoMessagesEnabled);
             if (body.ghostPingEnabled !== undefined) {
                 const gp = require('./utils/ghost-ping');
                 if (body.ghostPingEnabled) gp.enable();
                 else gp.disable();
             }
+            if (body.randomEventInterval !== undefined) botSettings.set('randomEventInterval', Number(body.randomEventInterval));
+            if (body.challengeInterval !== undefined) botSettings.set('challengeInterval', Number(body.challengeInterval));
+            if (body.moodMessageInterval !== undefined) botSettings.set('moodMessageInterval', Number(body.moodMessageInterval));
+            if (body.aiRandomReplyFrequency !== undefined) botSettings.set('aiRandomReplyFrequency', Number(body.aiRandomReplyFrequency));
+            
             return sendJson(200, { success: true });
+        }
+
+        if (urlPath === '/api/control/economy_manage') {
+            if (!body.userId || body.amount === undefined || !body.action) return sendJson(400, { success: false, error: 'بيانات ناقصة' });
+            
+            const uCache = db.loadDatabase().users;
+            if (!uCache[body.userId]) uCache[body.userId] = { balance: 0, bank: 0 };
+            
+            const amt = Number(body.amount);
+            if (body.action === 'add') {
+                db.addMoney(body.userId, amt);
+            } else if (body.action === 'remove') {
+                db.removeMoney(body.userId, amt);
+            } else if (body.action === 'set') {
+                uCache[body.userId].balance = amt;
+                db.saveDatabase();
+            }
+            
+            return sendJson(200, { success: true });
+        }
+
+        if (urlPath === '/api/control/moderation') {
+            if (!_client) return sendJson(500, { success: false, error: 'البوت غير متصل حالياً' });
+            if (!body.userId || !body.action || !body.guildId) return sendJson(400, { success: false, error: 'بيانات ناقصة' });
+            
+            try {
+                const guild = _client.guilds.cache.get(body.guildId);
+                if (!guild) return sendJson(404, { success: false, error: 'السيرفر غير موجود' });
+                
+                if (body.action === 'warn') {
+                    const dbCache = db.loadDatabase();
+                    if (!dbCache.users[body.userId]) dbCache.users[body.userId] = {};
+                    dbCache.users[body.userId].warnings = (dbCache.users[body.userId].warnings || 0) + 1;
+                    db.saveDatabase();
+                    return sendJson(200, { success: true, message: 'تم تحذير المستخدم بنجاح' });
+                }
+                
+                const member = await guild.members.fetch(body.userId).catch(() => null);
+                if (body.action === 'kick') {
+                    if (!member) return sendJson(404, { success: false, error: 'المستخدم غير موجود في السيرفر' });
+                    await member.kick(body.reason || 'طرد من لوحة التحكم');
+                    return sendJson(200, { success: true, message: 'تم الطرد بنجاح' });
+                } else if (body.action === 'ban') {
+                    await guild.members.ban(body.userId, { reason: body.reason || 'حظر من لوحة التحكم' });
+                    return sendJson(200, { success: true, message: 'تم الحظر بنجاح' });
+                } else if (body.action === 'unban') {
+                    await guild.bans.remove(body.userId, body.reason || 'فك حظر من لوحة التحكم');
+                    return sendJson(200, { success: true, message: 'تم فك الحظر بنجاح' });
+                }
+            } catch (err) {
+                return sendJson(500, { success: false, error: err.message });
+            }
         }
 
         if (urlPath === '/api/control/gift') {
