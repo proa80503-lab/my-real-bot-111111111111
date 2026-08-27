@@ -74,7 +74,7 @@ function buildResultEmbed(p1, p2, c1, c2, result, prize = 0) {
 }
 
 module.exports = {
-    name: aliases: ['حجر_ورقة_مقص', 'ركس', 'حجر'],
+    name: 'rps', aliases: ['حجر_ورقة_مقص', 'ركس', 'حجر'],
     description: 'لعبة حجر ورقة مقص بالأزرار',
     usage: 'rps [@مستخدم | بوت]',
 
