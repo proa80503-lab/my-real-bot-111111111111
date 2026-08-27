@@ -10,6 +10,7 @@ const chatLearner = require('./chat-learner');
 const aiBrain = require('./ai-brain');
 const clanManager = require('./clan-manager');
 const config = require('../config');
+const botSettings = require('./bot-settings');
 
 const MOODS = {
     happy: { emoji: '😄', label: 'مرح', color: '#FFD700' },
@@ -355,20 +356,38 @@ class RandomInteractions {
     }
 
     initialize(client) {
-        const cfg = require('../config');
+        const enabled = botSettings.get('autoMessagesEnabled');
         console.log('🎲 نظام التفاعلات العشوائية v3 جاهز — 11 حالة مزاجية');
-        console.log(`   📨 الرسائل التلقائية: ${cfg.autoMessagesEnabled !== false ? 'مفعلة' : 'معطلة'}`);
+        console.log(`   📨 الرسائل التلقائية: ${enabled !== false ? 'مفعلة' : 'معطلة'}`);
 
-        const randomEventMins  = cfg.randomEventInterval  || 20;   // كل 20 دقيقة
-        const challengeMins    = cfg.challengeInterval    || 45;   // كل 45 دقيقة
-        const moodMins         = cfg.moodMessageInterval  || 180;  // كل 3 ساعات
-        const greetingMins     = cfg.greetingInterval     || 240;  // كل 4 ساعات
+        // يقرأ الإعدادات عند كل تشغيل (ديناميكي)
+        const getInterval = (key, defaultMins) => (botSettings.get(key) || defaultMins) * 60 * 1000;
 
-        setInterval(() => this._changeMood(), 30 * 60 * 1000);
-        setInterval(() => this.triggerRandomEvent(client),       randomEventMins * 60 * 1000);
-        setInterval(() => this.triggerChallenge(client),         challengeMins   * 60 * 1000);
-        setInterval(() => this.sendMoodMessage(client),          moodMins        * 60 * 1000);
-        setInterval(() => this._sendTimeBasedGreeting(client),   greetingMins    * 60 * 1000);
+        setInterval(() => this._changeMood(), 30 * 60 * 1000).unref?.();
+
+        setInterval(() => {
+            if (botSettings.get('autoMessagesEnabled') !== false) {
+                this.triggerRandomEvent(client).catch(() => {});
+            }
+        }, getInterval('randomEventInterval', 20)).unref?.();
+
+        setInterval(() => {
+            if (botSettings.get('autoMessagesEnabled') !== false) {
+                this.triggerChallenge(client).catch(() => {});
+            }
+        }, getInterval('challengeInterval', 45)).unref?.();
+
+        setInterval(() => {
+            if (botSettings.get('autoMessagesEnabled') !== false) {
+                this.sendMoodMessage(client).catch(() => {});
+            }
+        }, getInterval('moodMessageInterval', 180)).unref?.();
+
+        setInterval(() => {
+            if (botSettings.get('autoMessagesEnabled') !== false) {
+                this._sendTimeBasedGreeting(client).catch(() => {});
+            }
+        }, getInterval('greetingInterval', 240)).unref?.();
     }
 
     _changeMood() {
@@ -383,8 +402,7 @@ class RandomInteractions {
 
     // ردود ديناميكية حسب وقت اليوم
     async _sendTimeBasedGreeting(client) {
-        const cfg = require('../config');
-        if (cfg.autoMessagesEnabled === false) return;
+        if (botSettings.get('autoMessagesEnabled') === false) return;
         const hour = new Date().getHours();
         if (Math.random() > 0.35) return; // 65% يتخطى
         let greet = null;
@@ -406,8 +424,7 @@ class RandomInteractions {
     getMoodInfo() { return MOODS[this.currentMood]; }
 
     async triggerRandomEvent(client) {
-        const cfg = require('../config');
-        if (cfg.autoMessagesEnabled === false) return;
+        if (botSettings.get('autoMessagesEnabled') === false) return;
         for (const [, guild] of client.guilds.cache) {
             try {
                 const ch = await this.getRandomChannel(guild);
@@ -425,8 +442,7 @@ class RandomInteractions {
     }
 
     async sendMoodMessage(client) {
-        const cfg = require('../config');
-        if (cfg.autoMessagesEnabled === false) return;
+        if (botSettings.get('autoMessagesEnabled') === false) return;
         for (const [, guild] of client.guilds.cache) {
             try {
                 const ch = await this.getRandomChannel(guild);
@@ -445,8 +461,7 @@ class RandomInteractions {
     }
 
     async triggerChallenge(client) {
-        const cfg = require('../config');
-        if (cfg.autoMessagesEnabled === false) return;
+        if (botSettings.get('autoMessagesEnabled') === false) return;
         for (const [, guild] of client.guilds.cache) {
             try {
                 const ch = await this.getRandomChannel(guild);
