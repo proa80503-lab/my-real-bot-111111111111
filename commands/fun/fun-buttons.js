@@ -354,7 +354,7 @@ const BALL_ANSWERS = [
 ];
 
 module.exports.ball = {
-    name: aliases: ['تنبؤ', 'كرة_الحظ', ],
+    name: 'fun', aliases: ['تنبؤ', 'كرة_الحظ', ],
     description: 'اسأل الكرة السحرية',
     usage: '8ball [سؤال]',
 
