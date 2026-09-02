@@ -24,6 +24,7 @@ module.exports = {
     youtubeApiKey: process.env.YOUTUBE_API_KEY || '',
     hfToken: process.env.HF_TOKEN || '',
     nvidiaApiKey: process.env.NVIDIA_API_KEY || '',
+    openrouterApiKey: process.env.OPENROUTER_API_KEY || '',
 
     // ─── إعدادات عامة ─────────────────────────────────────────────
     prefix: '!',
