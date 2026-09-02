@@ -382,6 +382,19 @@ async function _handleButton(interaction) {
         return _require('../commands/games/games-hub')?.handleGameButton(interaction);
     }
 
+    // Word Guess (Wordle) — زر الاستسلام
+    if (id.startsWith('wg_give_up_')) {
+        const targetUserId = id.replace('wg_give_up_', '');
+        if (interaction.user.id !== targetUserId) {
+            return interaction.reply({ content: '❌ هذه اللعبة مو إلك يخوي!', ephemeral: true });
+        }
+        return interaction.reply({
+            content: '🏳️ استسلمت! اكتب `خمّن` في الدردشة لتستسلم رسمياً.',
+            ephemeral: true,
+        });
+    }
+
+
     // Economy Hub (eco_)
     if (id.startsWith('eco_')) {
         return _require('../commands/economy/economy-hub')?.handleEcoButton(interaction);
