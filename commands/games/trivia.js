@@ -220,10 +220,14 @@ async function startTriviaGame(source, topic, difficulty) {
         ]
     );
 
-    if (source.isRepliable && !source.replied && !source.deferred) {
-        await source.update({ embeds: [embed], components: [] }).catch(async () => {
-            await channel.send({ embeds: [embed] });
-        });
+    if (typeof source.isRepliable === 'function' ? source.isRepliable() : source.isRepliable) {
+        if (!source.replied && !source.deferred) {
+            await source.update({ embeds: [embed], components: [] }).catch(async () => {
+                await channel.send({ embeds: [embed] });
+            });
+        } else {
+            await channel.send({ embeds: [embed], components: [] });
+        }
     } else {
         await channel.send({ embeds: [embed], components: [] });
     }
