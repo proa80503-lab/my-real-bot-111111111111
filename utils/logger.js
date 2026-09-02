@@ -1,19 +1,18 @@
 const { EmbedBuilder, AuditLogEvent } = require('discord.js');
 const db = require('./database');
 const config = require('../config');
+const channelResolver = require('./channel-resolver');
 
-// دالة لإرسال لوج إلى روم السجلات
+// دالة لإرسال لوج إلى قناة السجلات — بذكاء عبر channel-resolver
 async function sendLog(guild, embed) {
-    const guildData = db.getGuildData(guild.id);
-    if (!guildData.logChannel) return;
-
-    const logChannel = guild.channels.cache.get(guildData.logChannel);
+    // نبحث عن قناة السجلات باستخدام channel-resolver للبحث الذكي
+    const logChannel = channelResolver.resolve(guild, 'logChannel');
     if (!logChannel) return;
 
     try {
         await logChannel.send({ embeds: [embed] });
     } catch (error) {
-        // تجاهل أخطاء الصلاحيات بشكل صامت (السيرفر قد لا يكون مُعد بعد)
+        // تجاهل أخطاء الصلاحيات بشكل صامت
         if (error.code !== 50001) {
             console.error('خطأ غير متوقع في السجلات:', error.message);
         }
