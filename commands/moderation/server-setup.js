@@ -13,6 +13,7 @@ const {
 } = require('discord.js');
 const config = require('../../config');
 const db = require('../../utils/database');
+const channelResolver = require('../../utils/channel-resolver');
 
 // ─── الألوان ──────────────────────────────────────────────────────────────────
 const C = {
@@ -308,20 +309,23 @@ function buildServerStructure(guild) {
                     {
                         name: '👑┃لوحة-الأونر',
                         type: ChannelType.GuildText,
-                        topic: '🔐 حصري للأونر — لوحة التحكم الكاملة',
+                        topic: '🔐 حصري للأونر — اكتب داشبورد للوحة التحكم الكاملة',
                         privateAdmin: true,
+                        dbKey: 'ownerChannel',
                     },
                     {
                         name: '⚙️┃الإدارة-العامة',
                         type: ChannelType.GuildText,
-                        topic: '🛠️ قناة الإدارة — نقاشات داخلية',
+                        topic: '🛠️ قناة الإدارة — نقاشات داخلية وقرارات',
                         privateAdmin: true,
+                        dbKey: 'adminChannel',
                     },
                     {
                         name: '📝┃السجلات-الكاملة',
                         type: ChannelType.GuildText,
-                        topic: '📊 سجلات النظام التفصيلية',
+                        topic: '📊 سجلات النظام التفصيلية — جميع الأحداث',
                         privateAdmin: true,
+                        dbKey: 'logChannel',
                     },
                 ]
             },
@@ -954,10 +958,19 @@ async function buildServer(guild, progressMsg, isReset = false) {
         }
     }
 
-    // ─── الخطوة 4: حفظ البيانات ────────────────────────────────────────────
+    // ─── الخطوة 4: حفظ البيانات + مسح cache القنوات ─────────────────────────
     guildData.setupComplete = true;
     guildData.setupDate = Date.now();
     db.updateGuildData(guild.id, guildData);
+
+    // مسح cache channel-resolver وإعادة بنائه بناءً على القنوات المنشأة
+    channelResolver.invalidate(guild.id);
+    // حفظ القنوات المعروفة من channelRefs مباشرة
+    for (const [key, ch] of Object.entries(channelRefs)) {
+        if (!key.startsWith('post_') && ch && ch.id) {
+            channelResolver.save(guild.id, key, ch.id);
+        }
+    }
 
     // ─── الخطوة 5: نشر المحتوى ─────────────────────────────────────────────
     await progressMsg.edit({ embeds: [buildProgressEmbed('📝 نشر القوانين والأدلة...', 88, isReset)] }).catch(() => {});
