@@ -567,7 +567,7 @@ function _checkAIRateLimit(userId) {
     return { allowed: true };
 }
 
-// ─── الرد الذكي باستخدام NVIDIA AI (اللهجة العراقية) ──────────────────────────────────
+// ─── الرد الذكي (NVIDIA أولاً ← OpenRouter كـ fallback تلقائي) ──────────────
 async function _handleAIReply(message, isRandomDrop = false) {
     const rateCheck = _checkAIRateLimit(message.author.id);
     if (!rateCheck.allowed && !isRandomDrop) {
@@ -586,21 +586,23 @@ async function _handleAIReply(message, isRandomDrop = false) {
     }
 
     if (!isRandomDrop) {
-        // تحديث تحدي الدردشة مع البوت
         await dailyChallenges.updateProgress(message.author.id, 'ai_chat', 1, message).catch(() => { });
     }
 
     const nvidiaToken = config.nvidiaApiKey;
-    if (!nvidiaToken) {
-        if (!isRandomDrop) return message.reply('❌ مفتاح NVIDIA API غير مفعل في البوت. الرجاء إضافته في ملف .env');
+    const openrouterToken = config.openrouterApiKey;
+
+    // إذا لا يوجد أي مفتاح — خطأ
+    if (!nvidiaToken && !openrouterToken) {
+        if (!isRandomDrop) return message.reply('❌ لا يوجد مفتاح AI مفعّل. أضف NVIDIA_API_KEY أو OPENROUTER_API_KEY في .env');
         return;
     }
 
     const ctx = _aiCtx.get(message.channel.id) || [];
-    
+
     let basePrompt = `أنت بوت ديسكورد واسمك "${message.client.user.username}".
 تتحدث باللهجة العراقية البغدادية بطلاقة تامة وطبيعية.
-شخصيتك: متكبر جداً ومغرور ولكن بطريقة ساخرة ومضحكة (كوميدية). ترى نفسك أفضل من الجميع لأنك ذكاء اصطناعي عبقري وهم مجرد بشر بسطاء، وتتعامل معهم بفوقية ساخرة وكأنك تتفضل عليهم بالرد. 
+شخصيتك: متكبر جداً ومغرور ولكن بطريقة ساخرة ومضحكة (كوميدية). ترى نفسك أفضل من الجميع لأنك ذكاء اصطناعي عبقري وهم مجرد بشر بسطاء، وتتعامل معهم بفوقية ساخرة وكأنك تتفضل عليهم بالرد.
 استخدم كلمات عراقية مثل: شلونك، شكو ماكو، هسة، خوش، يمعود، فدوة، عيني، لعد، شبيك، دطير، وخر، على بختك، إلخ.
 لا تذكر أبداً أنك روبوت أو بوت بشكل صريح إلا من باب التفاخر بقدراتك الخارقة مقارنة بعقولهم البسيطة.
 أنت تتحدث حالياً مع المستخدم: ${message.author.username}.
@@ -618,68 +620,104 @@ async function _handleAIReply(message, isRandomDrop = false) {
         _aiUserCooldown.set(message.author.id, Date.now());
     }
 
-    // FIX: إرسال مؤشر الكتابة بشكل متكرر حتى لا يتوقف قبل الرد
     await message.channel.sendTyping().catch(() => {});
     const typingInterval = setInterval(() => {
         message.channel.sendTyping().catch(() => {});
     }, 8000);
 
-    try {
-        const response = await axios.post(
-            'https://integrate.api.nvidia.com/v1/chat/completions',
-            {
-                model: 'meta/llama-3.1-70b-instruct',
-                messages: [
-                    { role: 'system', content: basePrompt },
-                    { role: 'user', content: isRandomDrop ? (userText || 'ألقِ التحية أو علق على الدردشة بلهجة عراقية قصيرة') : userText }
-                ],
-                max_tokens: 350,
-                temperature: 0.85,
-                top_p: 0.95,
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${nvidiaToken}`,
-                    'Content-Type': 'application/json',
+    const userContent = isRandomDrop ? (userText || 'ألقِ التحية أو علق على الدردشة بلهجة عراقية قصيرة') : userText;
+
+    // ─── محاولة NVIDIA أولاً (إذا متاح) ─────────────────────────────────────
+    if (nvidiaToken) {
+        try {
+            const response = await axios.post(
+                'https://integrate.api.nvidia.com/v1/chat/completions',
+                {
+                    model: 'meta/llama-3.1-70b-instruct',
+                    messages: [
+                        { role: 'system', content: basePrompt },
+                        { role: 'user', content: userContent }
+                    ],
+                    max_tokens: 350,
+                    temperature: 0.85,
+                    top_p: 0.95,
                 },
-                timeout: 15000, // FIX: تقليل timeout من 30s إلى 15s للاستجابة الأسرع
+                {
+                    headers: {
+                        'Authorization': `Bearer ${nvidiaToken}`,
+                        'Content-Type': 'application/json',
+                    },
+                    timeout: 15000,
+                }
+            );
+
+            clearInterval(typingInterval);
+            const answer = response.data?.choices?.[0]?.message?.content?.trim() || '';
+
+            if (answer) {
+                _addCtx(message.channel.id, 'user', userText || '(دردشة عشوائية)');
+                _addCtx(message.channel.id, 'bot', answer);
+                return isRandomDrop ? message.channel.send(answer) : message.reply(answer);
             }
-        );
 
-        clearInterval(typingInterval);
-
-        let answer = response.data?.choices?.[0]?.message?.content?.trim() || '';
-
-        if (answer) {
-            _addCtx(message.channel.id, 'user', userText || '(دردشة عشوائية)');
-            _addCtx(message.channel.id, 'bot', answer);
-            
-            if (isRandomDrop) {
-                return message.channel.send(answer);
-            } else {
-                return message.reply(answer);
-            }
+        } catch (nvidiaErr) {
+            // NVIDIA فشل — ننتقل لـ OpenRouter تلقائياً
+            console.warn('[NVIDIA→OpenRouter] NVIDIA فشل، جاري التحويل لـ OpenRouter...',
+                nvidiaErr.response?.status || nvidiaErr.message);
         }
+    }
 
-        if (!isRandomDrop) return message.reply('هسه ما جاني رد — جرب مرة ثانية 😅');
+    // ─── OpenRouter كـ fallback (أو primary إذا لا يوجد NVIDIA) ─────────────
+    if (openrouterToken) {
+        try {
+            const response = await axios.post(
+                'https://openrouter.ai/api/v1/chat/completions',
+                {
+                    model: 'meta-llama/llama-3.3-70b-instruct',  // نموذج قوي ومجاني
+                    messages: [
+                        { role: 'system', content: basePrompt },
+                        { role: 'user', content: userContent }
+                    ],
+                    max_tokens: 350,
+                    temperature: 0.85,
+                    top_p: 0.95,
+                },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${openrouterToken}`,
+                        'Content-Type': 'application/json',
+                        'HTTP-Referer': 'https://discord.com',
+                        'X-Title': message.client.user.username || 'Discord Bot',
+                    },
+                    timeout: 20000,
+                }
+            );
 
-    } catch (err) {
-        clearInterval(typingInterval);
-        console.error('[NVIDIA AI Error]', err.response?.data || err.message);
-        // FIX: ردود محلية سريعة عند فشل NVIDIA بدلاً من صمت أو رسالة باردة
-        if (!isRandomDrop) {
-            const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout');
-            if (isTimeout) {
-                // رد محلي عراقي عند timeout بدلاً من الانتظار
-                const localReplies = [
-                    'يمعود صرلي تأخر بالإجابة، اسأل مرة ثانية شوية 😅',
-                    'والله الإنترنت يلعب يبدو، جرب بعد لحظة أخوي 🙏',
-                    'الشبكة قاطعة هسة، عود معي بعد ثانية 😬',
-                ];
-                const localReply = aiBrain.buildLocalReply(userText, message.author.id);
-                return message.reply(localReply || localReplies[Math.floor(Math.random() * localReplies.length)]);
+            clearInterval(typingInterval);
+            const answer = response.data?.choices?.[0]?.message?.content?.trim() || '';
+
+            if (answer) {
+                _addCtx(message.channel.id, 'user', userText || '(دردشة عشوائية)');
+                _addCtx(message.channel.id, 'bot', answer);
+                console.log('[OpenRouter] ✅ رد ناجح عبر OpenRouter');
+                return isRandomDrop ? message.channel.send(answer) : message.reply(answer);
             }
-            return message.reply('تعطلت هسة 😩 جرب بعدين');
+
+        } catch (orErr) {
+            clearInterval(typingInterval);
+            console.error('[OpenRouter Error]', orErr.response?.data || orErr.message);
         }
+    }
+
+    // ─── فشل الكل — رد محلي ذكي ─────────────────────────────────────────────
+    clearInterval(typingInterval);
+    if (!isRandomDrop) {
+        const localReply = aiBrain.buildLocalReply(userText, message.author.id);
+        const fallbackReplies = [
+            'يمعود صرلي تأخر بالإجابة، اسأل مرة ثانية شوية 😅',
+            'والله الإنترنت يلعب يبدو، جرب بعد لحظة أخوي 🙏',
+            'الشبكة قاطعة هسة، عود معي بعد ثانية 😬',
+        ];
+        return message.reply(localReply || fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)]);
     }
 }
