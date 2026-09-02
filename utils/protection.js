@@ -3,6 +3,7 @@ const config = require('../config');
 const db = require('./database');
 const clanManager = require('./clan-manager');
 const { sendPunishmentToChannel } = require('./punishments');
+const channelResolver = require('./channel-resolver');
 
 // نظام Anti-Spam
 const spamMap = new Map();
@@ -33,7 +34,7 @@ async function checkSpam(message) {
         try {
             await message.delete();
 
-            const warning = await message.channel.send(`⚠️ ${message.author} توقف عن الإزعاج! تم حذف رسائلك.`);
+            const warning = await message.channel.send(`⚠️ ${message.author} يخوي وقفت! مو راح تنفعك هذي. تم كتم صوتك 5 دقايق 🔇`);
             setTimeout(() => warning.delete().catch(() => { }), 5000);
 
             // إعطاء تايم أوت 5 دقائق
@@ -117,7 +118,7 @@ async function checkBadWords(message) {
                 }
             }
 
-            const warning = await message.channel.send(`🚫 ${message.author} **تم سجنك لمدة 10 دقائق بسبب استخدام ألفاظ نابية!**`);
+            const warning = await message.channel.send(`🔒 ${message.author} يخوي اشتغلت بالكلام الرديء! انسجنت 10 دقايق — لا تعيدها 😤`);
             setTimeout(() => warning.delete().catch(() => { }), 10000);
 
             // لوق الحماية (يبقى كما هو للتسجيل العام)
@@ -198,7 +199,7 @@ async function checkLinks(message) {
         try {
             await message.delete();
 
-            const warning = await message.channel.send(`⚠️ ${message.author} الروابط ممنوعة هنا!`);
+            const warning = await message.channel.send(`⚠️ ${message.author} يخوي الروابط ممنوعة هنا — حذفناها الحين 🚫`);
             setTimeout(() => warning.delete().catch(() => { }), 5000);
 
             logProtection(message.guild, {
@@ -234,7 +235,7 @@ async function checkCaps(message) {
             try {
                 await message.delete();
 
-                const warning = await message.channel.send(`⚠️ ${message.author} لا تستخدم الكثير من الحروف الكبيرة!`);
+                const warning = await message.channel.send(`⚠️ ${message.author} شبيه تصرخ؟ مو لازم كل هذا — كلّم بالطبيعي 😅`);
                 setTimeout(() => warning.delete().catch(() => { }), 5000);
 
                 logProtection(message.guild, {
@@ -266,7 +267,7 @@ async function checkMentionSpam(message) {
         try {
             await message.delete();
 
-            const warning = await message.channel.send(`⚠️ ${message.author} لا تذكر الكثير من الأشخاص/الرتب!`);
+            const warning = await message.channel.send(`⚠️ ${message.author} يخوي مو لازم تمنشن كل الدنيا — كتمناك 10 دقايق 🤐`);
             setTimeout(() => warning.delete().catch(() => { }), 5000);
 
             // timeout 10 دقائق
@@ -300,7 +301,7 @@ async function checkEmojiSpam(message) {
         try {
             await message.delete();
 
-            const warning = await message.channel.send(`⚠️ ${message.author} لا تضع الكثير من الإيموجي!`);
+            const warning = await message.channel.send(`⚠️ ${message.author} يخوي بس الإيموجي — ما يجوز هذا العدد 😵`);
             setTimeout(() => warning.delete().catch(() => { }), 5000);
 
             logProtection(message.guild, {
@@ -319,28 +320,54 @@ async function checkEmojiSpam(message) {
     return false;
 }
 
-// لوق أحداث الحماية
+// ─── لوق أحداث الحماية — يستخدم channel-resolver للبحث الذكي ─────────────
 async function logProtection(guild, data) {
     try {
-        const logChannel = guild.channels.cache.find(
-            ch => ch.name === 'الحماية' || ch.name === 'protection' || ch.name === '🛡️┃الحماية'
-        );
+        // نرسل أولاً لقناة الحماية، ثم لقناة السجلات كـ fallback
+        const logCh = channelResolver.resolve(guild, 'logChannel');
+        if (!logCh) return;
 
-        if (!logChannel) return;
+        // ترجمة أنواع الحماية للعربية
+        const typeLabels = {
+            'Anti-Spam':             '🚫 مكافحة السبام',
+            'Anti-Spam (Duplicate)': '🔁 رسائل مكررة',
+            'Anti-Raid':             '🚨 مكافحة الريد',
+            'Anti-Raid (Account Age)': '🆕 حساب جديد',
+            'Anti-Link':             '🔗 رابط ممنوع',
+            'Anti-Caps':             '🔠 حروف كبيرة',
+            'Anti-Mention Spam':     '📣 منشن سبام',
+            'Anti-Emoji Spam':       '😵 إيموجي سبام',
+            'Auto-Mod (Bad Words)':  '🤬 كلام رديء',
+            'Anti-Token Sniffing':   '🔐 محاولة سرقة',
+            'Anti-Phishing':         '🎣 روابط تصيد',
+        };
+        const typeAr = typeLabels[data.type] || `🛡️ ${data.type}`;
+
+        // ترجمة الإجراءات
+        const actionLabels = {
+            'Timeout 5 minutes': 'كتم 5 دقايق',
+            'Timeout 10 minutes': 'كتم 10 دقايق',
+            'Jail 10m': 'سجن 10 دقايق',
+            'Kicked': 'طرد من السيرفر',
+            'Message deleted': 'حذف الرسالة',
+        };
+        const actionAr = actionLabels[data.action] || data.action;
 
         const embed = new EmbedBuilder()
-            .setColor('#FF0000')
-            .setTitle(`🛡️ ${data.type}`)
+            .setColor('#E74C3C')
+            .setTitle(typeAr)
+            .setDescription(`> 👤 **العضو:** ${data.user} \`(${data.user.id})\``)
             .addFields(
-                { name: 'المستخدم', value: `${data.user.tag} (${data.user.id})`, inline: true },
-                { name: 'الإجراء', value: data.action, inline: true },
-                { name: 'السبب', value: data.reason }
+                { name: '⚡ الإجراء',  value: actionAr,         inline: true },
+                { name: '📋 السبب',   value: data.reason || 'غير محدد', inline: true },
+                { name: '⏰ الوقت',   value: `<t:${Math.floor(Date.now()/1000)}:T>`, inline: true },
             )
+            .setFooter({ text: '🛡️ نظام الحماية التلقائي' })
             .setTimestamp();
 
-        await logChannel.send({ embeds: [embed] });
+        await logCh.send({ embeds: [embed] }).catch(() => {});
     } catch (error) {
-        console.error('خطأ في لوق الحماية:', error);
+        // صامت — السجلات لا توقف البوت
     }
 }
 
@@ -399,7 +426,7 @@ async function checkDuplicateMessages(message) {
             await message.delete();
             await message.member.timeout(5 * 60 * 1000, 'Duplicate messages');
 
-            const warning = await message.channel.send(`⚠️ ${message.author} تم كتم صوتك 5 دقائق بسبب الرسائل المكررة!`);
+            const warning = await message.channel.send(`⚠️ ${message.author} يخوي تكرار الرسائل ما ينفع — كتمناك 5 دقايق 🔇`);
             setTimeout(() => warning.delete().catch(() => { }), 5000);
 
             logProtection(message.guild, {
