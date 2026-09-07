@@ -6,7 +6,7 @@ services:
     name: my-real-bot
     env: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm install && cd dashboard-ui && npm install && npm run build
     startCommand: node index.js
     healthCheckPath: /health
 
