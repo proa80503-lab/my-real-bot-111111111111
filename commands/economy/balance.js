@@ -10,6 +10,20 @@ module.exports = {
     description: 'عرض رصيد مستخدم آخر (بدون منشن = لوحة الاقتصاد)',
     usage: 'balance @user',
 
+    // ✅ Slash Command Definition
+    slash: {
+        name: 'balance',
+        description: 'عرض رصيدك الاقتصادي أو رصيد شخص آخر',
+        options: [
+            {
+                name: 'user',
+                description: 'المستخدم الذي تريد عرض رصيده',
+                type: 6, // USER
+                required: false,
+            },
+        ],
+    },
+
     async execute(context, args) {
         const isInteraction = context.isCommand?.() || context.isButton?.();
         const author = isInteraction ? context.user : context.author;
