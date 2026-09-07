@@ -40,6 +40,9 @@ const DEFAULTS = {
     ghostPingEnabled: false,          // منشن وهمي — معطّل افتراضياً
     ghostPingInterval: 21600000,      // 6 ساعات
 
+    // الحماية
+    antiRaidAccountAgeEnabled: true,  // حماية الحسابات الجديدة (7 أيام)
+
     // أوامر معطّلة
     disabledCommands: [],             // أسماء الأوامر المعطّلة ['casino','rob',...]
 
