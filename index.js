@@ -32,6 +32,7 @@ const client = new Client({
 try {
     const dashboard = require('./dashboard-server');
     dashboard.setClient(client);
+    dashboard.start(); // <-- أضفنا هذا السطر لتشغيل السيرفر الفعلي
     console.log('[Dashboard] ✅ لوحة التحكم مُشغَّلة');
 } catch (err) {
     console.error('[Dashboard] ❌ فشل تشغيل لوحة التحكم:', err.message);
