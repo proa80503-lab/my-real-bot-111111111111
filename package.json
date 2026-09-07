@@ -4,6 +4,7 @@
   "description": "بوت ديسكورد متطور مع العديد من الميزات",
   "main": "index.js",
   "scripts": {
+    "postinstall": "cd dashboard-ui && npm install && npm run build",
     "start": "node index.js",
     "dev": "nodemon index.js",
     "dashboard": "node dashboard-server.js",
