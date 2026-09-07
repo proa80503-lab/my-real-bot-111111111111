@@ -4,6 +4,7 @@ const db = require('./database');
 const clanManager = require('./clan-manager');
 const { sendPunishmentToChannel } = require('./punishments');
 const channelResolver = require('./channel-resolver');
+const botSettings = require('./bot-settings');
 
 // نظام Anti-Spam
 const spamMap = new Map();
@@ -448,6 +449,8 @@ async function checkDuplicateMessages(message) {
 
 // 2. Account Age Filter - فلتر عمر الحساب
 async function checkAccountAge(member) {
+    if (botSettings.get('antiRaidAccountAgeEnabled') === false) return false;
+
     const minAccountAge = 7 * 24 * 60 * 60 * 1000; // 7 أيام
     const accountAge = Date.now() - member.user.createdTimestamp;
 
