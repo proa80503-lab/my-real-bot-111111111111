@@ -10,8 +10,15 @@ module.exports = {
     description: 'الحصول على المكافأة اليومية',
     usage: 'يومي',
 
+    // ✅ Slash Command Definition
+    slash: {
+        name: 'daily',
+        description: 'احصل على مكافأتك اليومية من الاقتصاد',
+    },
+
     async execute(message) {
         try {
+
             const userId = message.author.id;
             const userData = db.getUserData(userId);
             const now = Date.now();
