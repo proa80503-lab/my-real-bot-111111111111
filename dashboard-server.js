@@ -55,7 +55,7 @@ module.exports.setClient = (c) => {
 const server = http.createServer(app);
 
 module.exports.start = () => {
-    server.listen(PORT, () => {
+    server.listen(PORT, '0.0.0.0', () => {
         console.log(`[Dashboard] 🌐 Server running on port ${PORT}`);
         console.log(`[Dashboard] 🔗 Internal URL: http://localhost:${PORT}`);
         if (RENDER_URL) console.log(`[Dashboard] ☁️ Public URL: ${RENDER_URL}`);
