@@ -26,9 +26,9 @@ app.get('/health', (req, res) => {
 });
 
 // Serve Vite frontend in production
-app.use(express.static(path.join(__dirname, '../../../dashboard-ui/dist')));
+app.use(express.static(path.join(__dirname, '../../dashboard-ui/dist')));
 app.use((req, res) => {
-    res.sendFile(path.join(__dirname, '../../../dashboard-ui/dist/index.html'));
+    res.sendFile(path.join(__dirname, '../../dashboard-ui/dist/index.html'));
 });
 
 module.exports = app;
