@@ -1034,15 +1034,18 @@ module.exports = {
     permissions: [PermissionFlagsBits.Administrator],
     category: 'إدارة',
 
-    async execute(message, args) {
+    async execute(message, args, options = {}) {
         // فحص الصلاحيات
         if (!message.member?.permissions.has(PermissionFlagsBits.Administrator) &&
             message.author.id !== config.ownerId) {
             return message.reply('❌ هذا الأمر يحتاج صلاحية **Administrator**!');
         }
 
-        const isReset = message.content.toLowerCase().includes('اعادة') ||
+        // ✅ إصلاح: قبول isReset عبر options أو الكشف من message.content كـ fallback
+        const isReset = options.isReset === true ||
+            message.content.toLowerCase().includes('اعادة') ||
             message.content.toLowerCase().includes('reset');
+
 
         // رسالة التأكيد بأزرار
         const confirmEmbed = new EmbedBuilder()
