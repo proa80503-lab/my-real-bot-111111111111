@@ -61,6 +61,17 @@ module.exports = {
                 return;
             }
 
+            // ══════════════════════════════════════════════════════════════
+            // 4. SLASH COMMANDS
+            // ══════════════════════════════════════════════════════════════
+            if (interaction.isChatInputCommand()) {
+                const slashHandler = _require('../handlers/slashHandler');
+                if (slashHandler) {
+                    await slashHandler.handleSlashCommand(interaction, interaction.client.commands);
+                }
+                return;
+            }
+
         } catch (error) {
             // خطأ 10062 = Unknown Interaction (انتهت صلاحيتها) — تجاهل بصمت
             if (error.code === 10062) return;
