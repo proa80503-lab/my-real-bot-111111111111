@@ -47,7 +47,14 @@ module.exports = {
     description: 'اعمل لكسب المال والخبرة',
     usage: 'عمل',
 
+    // ✅ Slash Command Definition
+    slash: {
+        name: 'work',
+        description: 'اعمل لكسب المال والخبرة (كل ساعة)',
+    },
+
     async execute(message) {
+
         try {
             const userId = message.author.id;
             const userData = db.getUserData(userId);
