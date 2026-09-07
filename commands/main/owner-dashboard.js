@@ -356,17 +356,20 @@ async function handleOwnerInteraction(interaction) {
                 { name: '📡 تكرار الرد (رسالة)',  value: `كل \`${s.aiRandomReplyFrequency || 10}\` رسالة`, inline: true },
                 { name: '⏰ الفترة العشوائية',     value: `كل \`${s.randomEventInterval || 20}\` دقيقة`, inline: true },
                 { name: '📅 التذكير اليومي',       value: s.dailyReminderEnabled ? '🟢 مفعّل' : '🔴 معطّل', inline: true },
-                { name: '🌙 ملخص المساء',          value: s.dailySummaryEnabled ? '🟢 مفعّل' : '🔴 معطّل', inline: true },
+                { name: '🛡️ حماية الحسابات الجديدة', value: s.antiRaidAccountAgeEnabled !== false ? '🟢 مفعّلة' : '🔴 معطّلة', inline: true },
             );
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('owner_toggle_auto_messages').setLabel('💬 تبديل الرسائل التلقائية').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId('owner_set_ai_freq').setLabel('📡 تغيير تكرار AI').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId('owner_toggle_ai').setLabel('🤖 تبديل AI').setStyle(ButtonStyle.Secondary),
+        );
+        const row2 = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('owner_toggle_protection').setLabel('🛡️ تبديل الحماية').setStyle(ButtonStyle.Danger),
             new ButtonBuilder().setCustomId('owner_back').setLabel('↩️ رجوع').setStyle(ButtonStyle.Secondary),
         );
 
-        return interaction.update({ embeds: [embed], components: [row] });
+        return interaction.update({ embeds: [embed], components: [row, row2] });
     }
 
     // ── 💬 تبديل الرسائل التلقائية ──────────────────────────────────────────
@@ -377,6 +380,38 @@ async function handleOwnerInteraction(interaction) {
             content: !current ? '🟢 تم تفعيل الرسائل التلقائية!' : '🔴 تم إيقاف الرسائل التلقائية!',
             flags: MessageFlags.Ephemeral
         });
+    }
+
+    // ── 🛡️ تبديل حماية الحسابات الجديدة ──────────────────────────────────────────
+    if (id === 'owner_toggle_protection') {
+        const current = botSettings.get('antiRaidAccountAgeEnabled') !== false;
+        botSettings.set('antiRaidAccountAgeEnabled', !current);
+        
+        // Return to settings to refresh the UI immediately
+        const s = botSettings.getAll();
+        const embed = new EmbedBuilder()
+            .setColor(COLORS.warning)
+            .setTitle('⚙️ إعدادات البوت')
+            .addFields(
+                { name: '💬 الرسائل التلقائية',   value: s.autoMessagesEnabled ? '🟢 مفعّلة' : '🔴 معطّلة', inline: true },
+                { name: '🤖 ردود الذكاء الاصطناعي', value: s.aiRandomReplyEnabled !== false ? '🟢 مفعّلة' : '🔴 معطّلة', inline: true },
+                { name: '📡 تكرار الرد (رسالة)',  value: `كل \`${s.aiRandomReplyFrequency || 10}\` رسالة`, inline: true },
+                { name: '⏰ الفترة العشوائية',     value: `كل \`${s.randomEventInterval || 20}\` دقيقة`, inline: true },
+                { name: '📅 التذكير اليومي',       value: s.dailyReminderEnabled ? '🟢 مفعّل' : '🔴 معطّل', inline: true },
+                { name: '🛡️ حماية الحسابات الجديدة', value: !current ? '🟢 مفعّلة' : '🔴 معطّلة', inline: true },
+            );
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('owner_toggle_auto_messages').setLabel('💬 تبديل الرسائل التلقائية').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('owner_set_ai_freq').setLabel('📡 تغيير تكرار AI').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('owner_toggle_ai').setLabel('🤖 تبديل AI').setStyle(ButtonStyle.Secondary),
+        );
+        const row2 = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('owner_toggle_protection').setLabel('🛡️ تبديل الحماية').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId('owner_back').setLabel('↩️ رجوع').setStyle(ButtonStyle.Secondary),
+        );
+
+        return interaction.update({ embeds: [embed], components: [row, row2] });
     }
 
     // ── 📡 تغيير تكرار AI ────────────────────────────────────────────────────
