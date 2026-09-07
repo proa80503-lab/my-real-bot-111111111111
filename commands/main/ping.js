@@ -17,23 +17,33 @@ try { analytics = require('../../utils/analytics'); } catch {}
 module.exports = {
     name: 'ping', aliases: ['بينج', 'latency', 'اختبار', ],
     description: 'فحص سرعة البوت والخوادم',
-    async execute(message) {
+
+    // ✅ Slash Command Definition
+    slash: {
+        name: 'ping',
+        description: 'فحص سرعة استجابة البوت وقاعدة البيانات',
+    },
+
+    async execute(context) {
+        const isInteraction = context.isCommand?.();
         const startTime = Date.now();
+        const author = isInteraction ? context.user : context.author;
+
 
         const loadingEmbed = new EmbedBuilder()
             .setColor('#FFD700')
             .setTitle('🔍 جاري قياس السرعة...')
             .setDescription('```\n⏳ يُقاس...\n```');
 
-        const reply = await message.reply({ embeds: [loadingEmbed] });
+        const reply = await context.reply({ embeds: [loadingEmbed], fetchReply: true });
         const roundTrip = Date.now() - startTime;
-        const apiPing = message.client.ws.ping;
+        const apiPing = context.client.ws.ping;
         const dbStart = Date.now();
 
         // قياس سرعة قاعدة البيانات
         let dbLatency = 0;
         try {
-            db.getUserData(message.author.id);
+            db.getUserData(author.id);
             dbLatency = Date.now() - dbStart;
         } catch { dbLatency = -1; }
 
@@ -66,8 +76,8 @@ module.exports = {
                 {
                     name: '🤖 معلومات البوت',
                     value: [
-                        `> **السيرفرات:** \`${message.client.guilds.cache.size}\``,
-                        `> **المستخدمون:** \`${message.client.users.cache.size.toLocaleString()}\``,
+                        `> **السيرفرات:** \`${context.client.guilds.cache.size}\``,
+                        `> **المستخدمون:** \`${context.client.users.cache.size.toLocaleString()}\``,
                         `> **Uptime:** \`${formatUptime(process.uptime())}\``,
                     ].join('\n'),
                     inline: true
@@ -97,7 +107,11 @@ module.exports = {
 
         embed.setFooter({ text: `⏰ ${new Date().toLocaleString('ar-SA')}` }).setTimestamp();
 
-        await reply.edit({ embeds: [embed] });
+        if (isInteraction) {
+            await context.editReply({ embeds: [embed] });
+        } else {
+            await reply.edit({ embeds: [embed] });
+        }
     }
 };
 
