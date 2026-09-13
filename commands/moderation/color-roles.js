@@ -159,7 +159,7 @@ async function assignColorRole(interaction, identifier) {
 
     try {
         const roleName = `🎨 ${color.name}`;
-        let role = interaction.guild.roles.cache.find(r => r.name === roleName);
+        let role = interaction.guild.roles.cache.find(r => r.name === roleName || r.name === color.name);
 
         if (!role) {
             // إنشاء الرتبة تلقائياً إذا حُذفت أو لم تُنشأ من قبل

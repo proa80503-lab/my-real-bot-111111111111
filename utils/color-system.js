@@ -220,29 +220,75 @@ async function handleColorSelect(interaction) {
         return interaction.reply({ content: '❌ اللون غير موجود', ephemeral: true });
     }
 
-    try {
         await interaction.deferReply({ ephemeral: true });
 
-        // حفظ اللون في قاعدة البيانات
+        // حفظ اللون في قاعدة البيانات (للبروفايل)
         const db2 = require('./database');
         db2.updateUserData(interaction.user.id, { color: colorData.hex });
+
+        // ── إسناد رتبة في الديسكورد ليتغير اللون في الشات ──
+        let assignedRole = false;
+        try {
+            const roleName = `🎨 ${colorData.name}`;
+            
+            // البحث عن الرتبة بالاسم (مع الإيموجي أو بدونه)
+            let role = interaction.guild.roles.cache.find(r => 
+                r.name === roleName || r.name === colorData.name
+            );
+
+            if (!role) {
+                // إنشاء الرتبة إذا لم تكن موجودة
+                role = await interaction.guild.roles.create({
+                    name: roleName,
+                    color: colorData.hex,
+                    permissions: [],
+                    mentionable: false,
+                    reason: 'نظام الألوان: إنشاء رتبة لون تلقائياً'
+                });
+            }
+
+            // إزالة جميع ألوان الأعضاء السابقة (الرتب التي تبدأ بـ 🎨 أو تطابق الألوان المتاحة)
+            const colorRoleNames = Object.values(availColors).map(c => c.name);
+            const rolesToRemove = interaction.member.roles.cache.filter(r => 
+                r.name.startsWith('🎨') || colorRoleNames.includes(r.name)
+            );
+
+            if (rolesToRemove.size > 0) {
+                await interaction.member.roles.remove(rolesToRemove);
+            }
+
+            // إضافة اللون الجديد
+            await interaction.member.roles.add(role);
+            assignedRole = true;
+        } catch (roleErr) {
+            console.error('[ColorSystem] Failed to assign role:', roleErr.message);
+            // سنستمر حتى نعلم المستخدم، لكن مع رسالة تحذيرية بخصوص الرتب
+        }
 
         const { EmbedBuilder: EB } = require('discord.js');
         await interaction.editReply({
             embeds: [
                 new EB()
                     .setColor(colorData.hex)
-                    .setTitle(`${colorData.emoji} تم تغيير لونك!`)
+                    .setTitle(`${colorData.emoji} تم تغيير لونك بنجاح!`)
                     .setDescription([
-                        `> لونك الجديد: **${colorData.name}** (${colorData.hex})`,
-                        `> اكتب \`!profile\` لترى بروفايلك بلونك الجديد 🎨`,
+                        `> **لون بروفايلك الآن:** ${colorData.name} (${colorData.hex})`,
+                        assignedRole 
+                            ? `> ✅ **لون الشات:** تم إعطاؤك رتبة اللون لتغيير لون اسمك في الشات.`
+                            : `> ⚠️ **تنبيه الشات:** لم أتمكن من إعطائك رتبة اللون. تأكد أن رتبة البوت أعلى من رتب الألوان ولديه صلاحية "إدارة الرتب".`,
+                        '',
+                        `> اكتب \`!profile\` لترى بطاقتك بلونك الجديد 🎨`,
                     ].join('\n'))
                     .setTimestamp()
             ],
         });
     } catch (err) {
         console.error('[ColorSystem] handleColorSelect error:', err.message);
-        interaction.reply({ content: '❌ حدث خطأ', ephemeral: true }).catch(() => {});
+        if (!interaction.replied && !interaction.deferred) {
+            interaction.reply({ content: '❌ حدث خطأ', ephemeral: true }).catch(() => {});
+        } else {
+            interaction.editReply({ content: '❌ حدث خطأ' }).catch(() => {});
+        }
     }
 }
 
