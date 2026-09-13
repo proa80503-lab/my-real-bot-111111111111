@@ -1,13 +1,18 @@
 'use strict';
 
 /**
- * public.js — Routes عامة لا تحتاج تسجيل دخول
+ * public.js — Routes عامة لا تحتاج تسجيل دخول (جزئياً)
  * Store, Auction, Bot Status
  */
 
 const express = require('express');
 const config = require('../../../config');
+const db = require('../../../utils/database');
+const { verifyToken } = require('./auth');
 const router = express.Router();
+
+// ─── قفل العمليات لمنع التدبيل ────────────────────────────────────────────────
+const activePurchases = new Set();
 
 // ──────────────────────────────────────────────────────────────────────────────
 // المتجر — عرض الأصناف
@@ -37,11 +42,101 @@ function getCategoryFromId(id) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// المتجر — الشراء المباشر عبر الويب
+// ──────────────────────────────────────────────────────────────────────────────
+router.post('/store/buy', verifyToken, async (req, res) => {
+    const { itemId } = req.body;
+    const userId = req.user.userId;
+
+    if (!itemId || !config.shopItems[itemId]) {
+        return res.status(400).json({ success: false, error: '❌ الغرض غير متوفر.' });
+    }
+
+    if (activePurchases.has(userId)) {
+        return res.status(429).json({ success: false, error: '⏳ جاري المعالجة، الرجاء الانتظار...' });
+    }
+
+    const item = config.shopItems[itemId];
+    activePurchases.add(userId);
+
+    try {
+        const now = Date.now();
+        const userData = db.getUserData(userId);
+        const balance = userData.balance || 0;
+        const inv = userData.inventory || {};
+
+        if (balance < item.price) {
+            return res.status(400).json({ success: false, error: `❌ رصيدك (${balance.toLocaleString()}) لا يكفي لشراء ${item.name}!` });
+        }
+
+        const isPermanent = item.duration >= 999;
+        if (isPermanent && inv[itemId] && itemId !== 'bankextend') {
+            return res.status(400).json({ success: false, error: `⚠️ أنت تملك ${item.name} بالفعل!` });
+        }
+
+        if (itemId === 'bankextend' && (userData.bankExtensions || 0) >= 10) {
+            return res.status(400).json({ success: false, error: '⚠️ لقد وصلت للحد الأقصى لتوسعة البنك!' });
+        }
+
+        // الخصم الذري
+        const removed = db.removeMoney(userId, item.price);
+        if (!removed) {
+            return res.status(400).json({ success: false, error: '❌ فشل الخصم، تأكد من رصيدك.' });
+        }
+
+        db.addTransaction(userId, 'shop_buy', item.price, `Web Buy: ${item.name}`);
+
+        const updates = { inventory: { ...inv } };
+        let customNote = '✅ تمت الإضافة لحقيبتك بنجاح!';
+
+        if (itemId !== 'bankextend') {
+            updates.inventory[itemId] = {
+                quantity: 1,
+                purchasedAt: now,
+                expiresAt: isPermanent ? null : now + (item.duration * 24 * 60 * 60 * 1000)
+            };
+        }
+
+        if (itemId === 'shield') updates.robShieldUntil = now + (24 * 60 * 60 * 1000);
+        if (itemId === 'vip_badge') updates.vipBadge = true;
+        if (itemId === 'rob_immunity') updates.robImmunity = true;
+        if (itemId === 'xp_boost_large') updates.xpBoostUntil = now + (7 * 24 * 60 * 60 * 1000);
+        if (itemId === 'vault') updates.vaultCap = (userData.vaultCap || 0) + 100000;
+        
+        if (itemId === 'bankextend') {
+            const currentExt = (userData.bankExtensions || 0) + 1;
+            updates.bankCap = (userData.bankCap || 0) + 50000;
+            updates.bankExtensions = currentExt;
+            customNote = `🏦 تم توسعة سعة البنك (المستوى: ${currentExt}/10)`;
+        }
+        
+        if (itemId === 'moneybag') {
+            const cash = Math.floor(Math.random() * 3300) + 200;
+            db.addMoney(userId, cash);
+            delete updates.inventory[itemId];
+            customNote = `💰 فتحت الكيس وحصلت على ${cash.toLocaleString()}!`;
+        }
+
+        db.updateFields(userId, updates);
+
+        return res.json({
+            success: true,
+            message: customNote,
+            newBalance: (db.getUserData(userId).balance || 0)
+        });
+
+    } catch (err) {
+        console.error('[Web Store Error]', err);
+        return res.status(500).json({ success: false, error: 'حدث خطأ في السيرفر' });
+    } finally {
+        activePurchases.delete(userId);
+    }
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
 // المزاد
 // ──────────────────────────────────────────────────────────────────────────────
 router.get('/auction', (req, res) => {
-    // المزاد حالياً يعتمد على Discord bot — هنا نعيد بيانات المزادات الموجودة في DB
-    // يمكن توسيعه مستقبلاً
     res.json({
         success: true,
         auctions: [],

@@ -174,11 +174,7 @@ async function _handleSelectMenu(interaction) {
         return colorSystem?.handleColorSelect(interaction);
     }
 
-    // Shop Select Menus — اختيار الفئات والعناصر من المتجر
-    if (id.startsWith('shop_')) {
-        const shop = _require('../commands/economy/shop');
-        return shop?.handleShopButton?.(interaction);
-    }
+
 
     // Select غير معروف
     if (!interaction.replied && !interaction.deferred) {
@@ -318,10 +314,7 @@ async function _handleButton(interaction) {
         return _require('../utils/punishments')?.handlePunishmentButton(interaction);
     }
 
-    // Shop buy buttons (قبل أزرار shop_ العامة)
-    if (id.startsWith('buy_')) {
-        return _require('../commands/economy/shop')?.handleShopButton(interaction);
-    }
+
 
     // Property
     if (id.startsWith('prop_')) {
@@ -422,10 +415,7 @@ async function _handleButton(interaction) {
         return _require('../commands/economy/economy-hub')?.handleEcoButton(interaction);
     }
 
-    // Shop (sbuy_, shop_, buy_ handled above)
-    if (id.startsWith('sbuy_') || id.startsWith('shop_') || id === 'shop_inv') {
-        return _require('../commands/economy/shop')?.handleShopButton(interaction);
-    }
+
 
     // Leaderboard
     if (id.startsWith('lb_')) {

@@ -16,10 +16,31 @@ export default function StorePage() {
   const [loading, setLoading] = useState(true)
   const [category, setCategory] = useState('all')
   const [search, setSearch] = useState('')
+  const [buying, setBuying] = useState(null)
 
   useEffect(() => {
     apiFetch('/public/store').then(d => { if (d?.success) setItems(d.items); setLoading(false) })
   }, [])
+
+  const handleBuy = async (item) => {
+    if (!window.confirm(`هل أنت متأكد أنك تريد شراء ${item.name} مقابل ${item.price.toLocaleString()}؟`)) return;
+    
+    setBuying(item.id)
+    try {
+      const res = await apiFetch('/public/store/buy', {
+        method: 'POST',
+        body: JSON.stringify({ itemId: item.id })
+      });
+      if (res && res.success) {
+        alert(res.message + '\nرصيدك المتبقي: ' + res.newBalance.toLocaleString());
+      } else {
+        alert(res?.error || '❌ حدث خطأ أثناء الشراء');
+      }
+    } catch (err) {
+      alert('❌ فشل الاتصال بالسيرفر');
+    }
+    setBuying(null)
+  }
 
   const filtered = items.filter(item => {
     const matchCat = category === 'all' || item.category === category
@@ -79,17 +100,24 @@ export default function StorePage() {
                 <div className="item-name">{item.name}</div>
                 <div className="item-desc">{item.description || 'أيتم مميز'}</div>
                 {item.duration && (
-                  <div className="badge badge-blue" style={{ marginBottom: 10 }}>⏱️ {item.duration}</div>
+                  <div className="badge badge-blue" style={{ marginBottom: 10 }}>⏱️ {item.duration === 999 ? '♾️ دائم' : item.duration + ' أيام'}</div>
                 )}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, marginBottom: 16 }}>
                   <div className="item-price">{(item.price || 0).toLocaleString()} <span>💰</span></div>
                   <div className="badge badge-blue" style={{ fontSize: 10 }}>
                     {CATEGORIES[item.category] || '📦'}
                   </div>
                 </div>
-                <div style={{ marginTop: 12, padding: '8px 10px', background: 'rgba(88,101,242,0.1)', borderRadius: 8, fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>
-                  اكتب <code>!buy {item.id}</code> في Discord للشراء
-                </div>
+                
+                <button 
+                  className="btn btn-primary" 
+                  style={{ width: '100%' }}
+                  onClick={() => handleBuy(item)}
+                  disabled={buying === item.id}
+                >
+                  {buying === item.id ? 'جاري الشراء...' : '🛒 شراء الآن'}
+                </button>
+
               </div>
             </div>
           ))}
