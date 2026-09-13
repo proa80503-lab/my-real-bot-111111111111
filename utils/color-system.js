@@ -220,6 +220,7 @@ async function handleColorSelect(interaction) {
         return interaction.reply({ content: '❌ اللون غير موجود', ephemeral: true });
     }
 
+    try {
         await interaction.deferReply({ ephemeral: true });
 
         // حفظ اللون في قاعدة البيانات (للبروفايل)
