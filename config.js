@@ -97,7 +97,6 @@ module.exports = {
 
         // أدوات وحماية
         shield: { name: 'درع معدني', price: 5000, description: 'حماية من السرقة لـ 24 ساعة', emoji: '🛡️', duration: 1, image: 'https://images.unsplash.com/photo-1588600878108-578307a3cc9d?q=80&w=800' },
-        moneybag: { name: 'كيس المال', price: 1000, description: 'يحتوي على مبلغ عشوائي', emoji: '💰', duration: 1, image: 'https://images.unsplash.com/photo-1579621970588-a35d0e7ab9b6?q=80&w=800' },
         vip_badge: { name: 'شارة VIP', price: 50000, description: 'شارة VIP الخاصة بالمليارديرات', emoji: '👑', duration: 30, image: 'https://images.unsplash.com/photo-1604147706283-d7119b5b822c?q=80&w=800' },
         rob_immunity: { name: 'حصانة دائمة', price: 100000, description: 'لا أحد يستطيع سرقتك أبداً', emoji: '⚔️', duration: 999, image: 'https://images.unsplash.com/photo-1614030424734-7a329d93e8e2?q=80&w=800' },
         

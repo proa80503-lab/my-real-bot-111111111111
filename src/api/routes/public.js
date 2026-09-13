@@ -31,7 +31,7 @@ function getCategoryFromId(id) {
     if (['smartphone','laptop'].includes(id)) return 'electronics';
     if (['sport_car','yacht','private_jet'].includes(id)) return 'vehicles';
     if (['villa','mansion','private_island'].includes(id)) return 'realestate';
-    if (['shield','moneybag','vip_badge','rob_immunity'].includes(id)) return 'tools';
+    if (['shield','vip_badge','rob_immunity'].includes(id)) return 'tools';
     if (['bankextend','vault','xp_boost_large'].includes(id)) return 'upgrades';
     return 'other';
 }

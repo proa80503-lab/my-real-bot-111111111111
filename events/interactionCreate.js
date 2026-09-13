@@ -174,6 +174,12 @@ async function _handleSelectMenu(interaction) {
         return colorSystem?.handleColorSelect(interaction);
     }
 
+    // Shop Select Menus — اختيار الفئات والعناصر من المتجر
+    if (id.startsWith('shop_')) {
+        const shop = _require('../commands/economy/shop');
+        return shop?.handleShopButton?.(interaction);
+    }
+
     // Select غير معروف
     if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({ content: '⚙️ هذه القائمة لا تعمل حالياً.', ephemeral: true }).catch(() => {});

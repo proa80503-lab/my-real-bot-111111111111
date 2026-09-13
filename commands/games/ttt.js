@@ -155,23 +155,41 @@ async function endGame(game, interaction = null) {
 
     // منح جوائز
     const winResult = checkWinner(game.board);
-    if (winResult && !game.vsBot) {
-        const winnerId = winResult.winner === 'X' ? game.player1.id : game.player2.id;
-        const loserId  = winResult.winner === 'X' ? game.player2.id : game.player1.id;
-        const prize = 300;
-        db.addMoney(winnerId, prize);
-        db.addTransaction(winnerId, 'ttt_win', prize, 'TTT Win');
+    if (winResult) {
+        if (game.vsBot) {
+            if (winResult.winner === 'X') {
+                const prize = 150;
+                db.addMoney(game.player1.id, prize);
+                db.addTransaction(game.player1.id, 'ttt_win', prize, 'TTT Win vs Bot');
+                const pData = db.getUserData(game.player1.id);
+                db.updateFields(game.player1.id, {
+                    'stats.gamesPlayed': (pData.stats?.gamesPlayed || 0) + 1,
+                    'stats.gamesWon': (pData.stats?.gamesWon || 0) + 1,
+                });
+            } else {
+                const pData = db.getUserData(game.player1.id);
+                db.updateFields(game.player1.id, {
+                    'stats.gamesPlayed': (pData.stats?.gamesPlayed || 0) + 1,
+                });
+            }
+        } else {
+            const winnerId = winResult.winner === 'X' ? game.player1.id : game.player2.id;
+            const loserId  = winResult.winner === 'X' ? game.player2.id : game.player1.id;
+            const prize = 300;
+            db.addMoney(winnerId, prize);
+            db.addTransaction(winnerId, 'ttt_win', prize, 'TTT Win');
 
-        // إحصائيات
-        const wData = db.getUserData(winnerId);
-        db.updateFields(winnerId, {
-            'stats.gamesPlayed': (wData.stats?.gamesPlayed || 0) + 1,
-            'stats.gamesWon': (wData.stats?.gamesWon || 0) + 1,
-        });
-        const lData = db.getUserData(loserId);
-        db.updateFields(loserId, {
-            'stats.gamesPlayed': (lData.stats?.gamesPlayed || 0) + 1,
-        });
+            // إحصائيات
+            const wData = db.getUserData(winnerId);
+            db.updateFields(winnerId, {
+                'stats.gamesPlayed': (wData.stats?.gamesPlayed || 0) + 1,
+                'stats.gamesWon': (wData.stats?.gamesWon || 0) + 1,
+            });
+            const lData = db.getUserData(loserId);
+            db.updateFields(loserId, {
+                'stats.gamesPlayed': (lData.stats?.gamesPlayed || 0) + 1,
+            });
+        }
     }
 
     try {
@@ -279,16 +297,25 @@ module.exports = {
 
         // ── قبول الدعوة
         if (id.startsWith('ttt_accept_')) {
-            const challengerId = id.split('_')[2];
+            const parts = id.split('_');
+            const challengerId = parts[2];
+            const targetId = parts[3];
+
             if (interaction.user.id === challengerId) {
                 return interaction.reply({ content: '❌ لا يمكنك قبول تحديك الخاص!', flags: MessageFlags.Ephemeral });
             }
-            if (tttGames.has(interaction.channelId)) {
-                return interaction.reply({ content: '⚠️ اللعبة بدأت بالفعل!', flags: MessageFlags.Ephemeral });
+
+            if (targetId && interaction.user.id !== targetId) {
+                return interaction.reply({ content: '❌ هذه الدعوة موجهة لشخص محدد!', flags: MessageFlags.Ephemeral });
+            }
+
+            const channelId = interaction.channelId || interaction.channel?.id;
+            if (tttGames.has(channelId)) {
+                return interaction.reply({ content: '⚠️ اللعبة بدأت بالفعل أو توجد لعبة نشطة في هذه القناة!', flags: MessageFlags.Ephemeral });
             }
 
             const guild = interaction.guild;
-            const challenger = await guild.members.fetch(challengerId).catch(() => null);
+            const challenger = await guild?.members.fetch(challengerId).catch(() => null);
             if (!challenger) return interaction.reply({ content: '❌ لم يتم إيجاد المتحدي!', flags: MessageFlags.Ephemeral });
 
             await interaction.deferUpdate();
@@ -296,14 +323,24 @@ module.exports = {
             return;
         }
 
-        // ── رفض الدعوة
+        // ── رفض أو إلغاء الدعوة
         if (id.startsWith('ttt_decline_')) {
-            const challengerId = id.split('_')[2];
-            if (interaction.user.id !== challengerId) {
-                return interaction.reply({ content: '❌ فقط صاحب الدعوة يستطيع إلغاءها!', flags: MessageFlags.Ephemeral });
+            const parts = id.split('_');
+            const challengerId = parts[2];
+            const targetId = parts[3];
+
+            if (interaction.user.id !== challengerId && (!targetId || interaction.user.id !== targetId)) {
+                return interaction.reply({ content: '❌ فقط أصحاب الدعوة يستطيعون إلغاءها أو رفضها!', flags: MessageFlags.Ephemeral });
             }
+
+            const isChallenger = interaction.user.id === challengerId;
             await interaction.update({
-                embeds: [new EmbedBuilder().setColor('#ED4245').setTitle('❌ تم إلغاء الدعوة').setDescription('> ألغى صاحب الدعوة اللعبة.')],
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor('#ED4245')
+                        .setTitle('❌ تم إلغاء الدعوة')
+                        .setDescription(isChallenger ? '> ألغى صاحب الدعوة اللعبة.' : `> رفض ${interaction.user} التحدي.`)
+                ],
                 components: []
             });
             return;
@@ -312,12 +349,17 @@ module.exports = {
         // ── حركة اللعبة
         if (id.startsWith('ttt_move_')) {
             const parts = id.split('_');
-            const gameId = parts[2];
-            const cellIdx = parseInt(parts[3]);
+            const cellIdx = parseInt(parts[parts.length - 1], 10);
+            const gameId = parts.slice(2, -1).join('_');
 
-            const game = tttGames.get(interaction.channelId);
-            if (!game || game.id !== gameId) {
+            const channelId = interaction.channelId || interaction.channel?.id;
+            const game = tttGames.get(channelId);
+            if (!game || game.id !== gameId || game.ended) {
                 return interaction.reply({ content: '❌ هذه اللعبة انتهت أو غير موجودة.', flags: MessageFlags.Ephemeral });
+            }
+
+            if (interaction.message) {
+                game.message = interaction.message;
             }
 
             // تحقق من الدور
@@ -357,7 +399,7 @@ module.exports = {
 // ─── بدء لعبة ضد البوت ───────────────────────────────────────────────────────
 async function startBotGame(msgOrInteraction, player) {
     const channelId = msgOrInteraction.channelId || msgOrInteraction.channel?.id;
-    const gameId = `${channelId}_${Date.now()}`;
+    const gameId = `${Date.now()}`;
 
     const game = {
         id: gameId,
@@ -377,13 +419,14 @@ async function startBotGame(msgOrInteraction, player) {
     const components = buildBoard(game);
 
     let msg;
-    if (msgOrInteraction.editedTimestamp !== undefined || msgOrInteraction.edit) {
-        // رسالة عادية
+    if (msgOrInteraction.isMessageComponent?.() || msgOrInteraction.isButton?.()) {
+        msg = await msgOrInteraction.message.edit({ embeds: [embed], components });
+    } else if (msgOrInteraction.edit && msgOrInteraction.author?.id === msgOrInteraction.client?.user?.id) {
         msg = await msgOrInteraction.edit({ embeds: [embed], components }).catch(
             () => msgOrInteraction.channel?.send({ embeds: [embed], components })
         );
     } else {
-        msg = await msgOrInteraction.channel?.send({ embeds: [embed], components });
+        msg = await msgOrInteraction.reply({ embeds: [embed], components });
     }
 
     game.message = msg;
@@ -400,8 +443,8 @@ async function startBotGame(msgOrInteraction, player) {
 
 // ─── بدء لعبة PvP ────────────────────────────────────────────────────────────
 async function startPvPGame(interaction, player1, player2) {
-    const channelId = interaction.channelId;
-    const gameId = `${channelId}_${Date.now()}`;
+    const channelId = interaction.channelId || interaction.channel?.id;
+    const gameId = `${Date.now()}`;
 
     // عشوائية من يبدأ
     const first = Math.random() < 0.5;
@@ -425,7 +468,12 @@ async function startPvPGame(interaction, player1, player2) {
     const embed = buildGameEmbed(game, `✅ ${player2.username} قبل التحدي!\n\n🎮 **الدور على:** ${xPlayer.username} (❌)`);
     const components = buildBoard(game);
 
-    const msg = await interaction.message.edit({ embeds: [embed], components });
+    let msg;
+    try {
+        msg = await interaction.message.edit({ embeds: [embed], components });
+    } catch {
+        msg = await interaction.channel?.send({ embeds: [embed], components });
+    }
     game.message = msg;
 
     // انتهاء اللعبة بعد 10 دقائق
@@ -451,11 +499,11 @@ async function sendInvitation(message, challenger, target) {
 
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(`ttt_accept_${challenger.id}`)
+            .setCustomId(`ttt_accept_${challenger.id}_${target.id}`)
             .setLabel('✅ قبول التحدي!')
             .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
-            .setCustomId(`ttt_decline_${challenger.id}`)
+            .setCustomId(`ttt_decline_${challenger.id}_${target.id}`)
             .setLabel('❌ رفض')
             .setStyle(ButtonStyle.Danger),
     );
