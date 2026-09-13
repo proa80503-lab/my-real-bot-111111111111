@@ -79,6 +79,7 @@ export function AuthProvider({ children }) {
     }
     if (urlError) {
       console.error('[Auth] OAuth error from URL:', urlError)
+      localStorage.setItem('authError', urlError)
       window.history.replaceState({}, '', window.location.pathname)
     }
 

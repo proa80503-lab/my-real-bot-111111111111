@@ -5,7 +5,12 @@ import { apiFetch } from '../auth'
 export default function LoginPage({ onLogin }) {
   const [key, setKey] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(() => {
+    const saved = localStorage.getItem('authError')
+    if (saved) localStorage.removeItem('authError')
+    if (saved === 'discord_denied') return 'تم إلغاء تسجيل الدخول أو رفض الصلاحيات من الديسكورد.'
+    return saved ? `خطأ في تسجيل الدخول: ${saved}` : ''
+  })
 
   const handleKeyLogin = async (e) => {
     e.preventDefault()
