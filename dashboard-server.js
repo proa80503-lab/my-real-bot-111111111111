@@ -11,6 +11,8 @@ const http = require('http');
 const app = require('./src/api/server');
 const botSettings = require('./utils/bot-settings');
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
+const { JWT_SECRET } = require('./src/api/routes/auth');
 
 const PORT = process.env.PORT || 3000;
 const DASHBOARD_KEY = botSettings.get('dashboardKey');
@@ -27,7 +29,6 @@ module.exports.DASHBOARD_KEY = DASHBOARD_KEY;
 const webTokens = new Map();
 
 function generateWebToken(user) {
-    const token = crypto.randomBytes(16).toString('hex');
     let avatar;
     try {
         avatar = typeof user.displayAvatarURL === 'function'
@@ -36,12 +37,12 @@ function generateWebToken(user) {
     } catch {
         avatar = `https://cdn.discordapp.com/embed/avatars/0.png`;
     }
-    webTokens.set(token, {
+    const token = jwt.sign({
         userId: user.id,
         username: user.username || user.globalName || 'مستخدم',
         avatar,
-        expiresAt: Date.now() + (1000 * 60 * 30)
-    });
+        role: 'user'
+    }, JWT_SECRET, { expiresIn: '1h' });
     return token;
 }
 module.exports.generateWebToken = generateWebToken;

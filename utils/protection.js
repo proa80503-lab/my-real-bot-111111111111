@@ -8,7 +8,7 @@ const botSettings = require('./bot-settings');
 
 // نظام Anti-Spam
 const spamMap = new Map();
-const SPAM_THRESHOLD = 5; // عدد الرسائل
+const SPAM_THRESHOLD = 18; // عدد الرسائل
 const SPAM_TIME = 5000; // في 5 ثوان
 
 async function checkSpam(message) {

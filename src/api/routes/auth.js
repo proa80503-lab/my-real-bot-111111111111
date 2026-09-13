@@ -21,7 +21,11 @@ const BOT_OWNER_ID = process.env.OWNER_ID;
 // Discord OAuth2
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || '';
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || '';
-const DISCORD_REDIRECT_URI = process.env.DISCORD_REDIRECT_URI || 'http://localhost:3000/auth/discord/callback';
+
+// استخدم رابط رندر التلقائي إذا كان البوت مرفوعاً على منصة Render
+const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
+const DISCORD_REDIRECT_URI = process.env.DISCORD_REDIRECT_URI || (RENDER_URL ? `${RENDER_URL}/auth/discord/callback` : 'http://localhost:3000/auth/discord/callback');
+
 const DISCORD_API = 'https://discord.com/api/v10';
 
 // ─── Sign JWT ─────────────────────────────────────────────────────────────────

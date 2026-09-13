@@ -39,8 +39,9 @@ module.exports = {
         const guildId = message.guild.id;
         const allClans = clanManager.getAllClans(guildId);
 
+        // Always allow proceeding even if JSON says no clans, so the user can sweep orphaned roles.
         if (allClans.length === 0) {
-            return message.reply('✅ لا يوجد كلانات في هذا السيرفر أصلاً!');
+            message.reply('⚠️ لا يوجد كلانات مسجلة في قاعدة البيانات، ولكن سيتم فحص ومسح أي قنوات أو رتب قديمة عالقة.');
         }
 
         // ──── رسالة تأكيد ─────────────────────────────────
@@ -115,6 +116,40 @@ module.exports = {
                 }
             }
 
+            // ──── مسح الرتب والقنوات القديمة العالقة (Orphaned) ─────────
+            let orphanedRoles = 0;
+            let orphanedChannels = 0;
+            
+            try {
+                const guildRoles = await message.guild.roles.fetch();
+                for (const [id, role] of guildRoles) {
+                    if (role.name.includes(' - قائد') || role.name.includes(' - نائب') || 
+                        role.name.includes(' - ضابط') || role.name.includes(' - جندي') || 
+                        role.name.includes('👑') || role.name.includes('⭐') || 
+                        role.name.includes('🎖️') || role.name.includes('🛡️')) {
+                        
+                        // تجاهل الرتب الأساسية للسيرفر إذا كان اسمها يحتوي إيموجي صدفة
+                        if (role.name.includes('قائد') || role.name.includes('نائب') || role.name.includes('ضابط') || role.name.includes('جندي')) {
+                            await role.delete().catch(() => {});
+                            orphanedRoles++;
+                        }
+                    }
+                }
+                
+                const guildChannels = await message.guild.channels.fetch();
+                for (const [id, ch] of guildChannels) {
+                    if (ch.name.includes('🏰・') || ch.name.includes('💬・شات-') || 
+                        ch.name.includes('⚙️・إدارة-') || ch.name.startsWith('🔊・') || 
+                        ch.name.includes('الكلانات') || ch.name.includes('🏰 ══ الكلانات ══') ||
+                        ch.name === '🏰┃الكلانات') {
+                        await ch.delete().catch(() => {});
+                        orphanedChannels++;
+                    }
+                }
+            } catch (e) {
+                console.error('Error sweeping orphaned assets:', e);
+            }
+
             // ──── امسح كل البيانات من JSON ────────────
             clanManager.clearGuild(guildId);
 
@@ -123,8 +158,10 @@ module.exports = {
                 .setColor(failed === 0 ? '#2ECC71' : '#E67E22')
                 .setTitle('💥 Nuke Clans — اكتمل!')
                 .setDescription([
-                    `✅ **تم حذف:** ${deleted} كلان`,
-                    failed > 0 ? `❌ **فشل:** ${failed} كلان` : '',
+                    `✅ **تم حذف:** ${deleted} كلان مسجل`,
+                    failed > 0 ? `❌ **فشل:** ${failed} كلان مسجل` : '',
+                    '',
+                    `🧹 **مسح إضافي:** تم حذف **${orphanedRoles}** رتبة قديمة و **${orphanedChannels}** قناة عالقة!`,
                     '',
                     '**التفاصيل:**',
                     details.join('\n'),

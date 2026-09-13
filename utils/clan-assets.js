@@ -243,9 +243,47 @@ async function removeMemberRole(guild, memberId, clan) {
     await member.roles.remove(rolesToRemove).catch(() => { });
 }
 
+async function renameClanAssets(guild, clan, newName) {
+    try {
+        if (clan.categoryId) {
+            const cat = await guild.channels.fetch(clan.categoryId).catch(() => null);
+            if (cat) await cat.setName(`🏰・${newName}`).catch(() => {});
+        }
+        if (clan.textChannelId) {
+            const txt = await guild.channels.fetch(clan.textChannelId).catch(() => null);
+            if (txt) await txt.setName(`💬・شات-${newName}`).catch(() => {});
+        }
+        if (clan.adminChannelId) {
+            const adm = await guild.channels.fetch(clan.adminChannelId).catch(() => null);
+            if (adm) await adm.setName(`⚙️・إدارة-${newName}`).catch(() => {});
+        }
+        if (clan.voiceChannelId) {
+            const vc = await guild.channels.fetch(clan.voiceChannelId).catch(() => null);
+            if (vc) await vc.setName(`🔊・${newName}`).catch(() => {});
+        }
+        if (clan.roles) {
+            const roleNames = {
+                leader: `👑 ${newName} - قائد`,
+                deputy: `⭐ ${newName} - نائب`,
+                officer: `🎖️ ${newName} - ضابط`,
+                member: `🛡️ ${newName} - جندي`
+            };
+            for (const [key, roleId] of Object.entries(clan.roles)) {
+                if (roleId && roleNames[key]) {
+                    const r = await guild.roles.fetch(roleId).catch(() => null);
+                    if (r) await r.setName(roleNames[key]).catch(() => {});
+                }
+            }
+        }
+    } catch (e) {
+        console.error('Error renaming clan assets:', e);
+    }
+}
+
 module.exports = {
     createClanAssets,
     deleteClanAssets,
     addMemberRole,
-    removeMemberRole
+    removeMemberRole,
+    renameClanAssets
 };

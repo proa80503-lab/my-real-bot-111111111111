@@ -387,7 +387,20 @@ module.exports = {
 
         clan.description = desc;
         clanManager.saveClans();
+        
         await interaction.reply({ content: `✅ تم تحديث وصف الكلان!`, flags: MessageFlags.Ephemeral });
+        
+        // Update the dashboard message if it was opened from one
+        if (interaction.message) {
+            try {
+                // Not using showDashboard directly to avoid error if it's the static admin dashboard
+                // because showDashboard will override the admin dashboard UI. 
+                // Only update if it's a normal message dashboard
+                if (interaction.message.embeds?.[0]?.title?.includes('لوحة إدارة كلان') === false) {
+                    await module.exports.showDashboard(interaction.message, clan);
+                }
+            } catch (e) {}
+        }
     },
 
     async handleRenameButton(interaction, clanId) {
@@ -419,7 +432,27 @@ module.exports = {
         const old = clan.name;
         clan.name = newName;
         clanManager.saveClans();
-        await interaction.reply({ content: `✅ تم تغيير اسم الكلان: **${old}** → **${newName}**`, flags: MessageFlags.Ephemeral });
+        
+        await interaction.reply({ content: `⏳ جاري تحديث اسم الكلان وموارده...`, flags: MessageFlags.Ephemeral });
+        
+        // تحديث أسماء القنوات والرتب في ديسكورد
+        await clanAssets.renameClanAssets(interaction.guild, clan, newName);
+        
+        await interaction.editReply({ content: `✅ تم تغيير اسم الكلان: **${old}** → **${newName}**` });
+        
+        // Update the dashboard message if applicable
+        if (interaction.message) {
+            try {
+                if (interaction.message.embeds?.[0]?.title?.includes('لوحة إدارة كلان')) {
+                    // Update the title of the admin dashboard
+                    const oldEmbed = interaction.message.embeds[0];
+                    const newEmbed = EmbedBuilder.from(oldEmbed).setTitle(`🏰 لوحة إدارة كلان ${newName}`);
+                    await interaction.message.edit({ embeds: [newEmbed] });
+                } else {
+                    await module.exports.showDashboard(interaction.message, clan);
+                }
+            } catch (e) {}
+        }
     },
 
     async handleKickButton(interaction) {

@@ -58,11 +58,11 @@ export function AuthProvider({ children }) {
     if (urlToken) {
       localStorage.setItem('token', urlToken)
       if (urlRole) localStorage.setItem('role', urlRole)
-      window.history.replaceState({}, '', '/')
+      window.history.replaceState({}, '', window.location.pathname)
     }
     if (urlError) {
       console.error('OAuth error:', urlError)
-      window.history.replaceState({}, '', '/')
+      window.history.replaceState({}, '', window.location.pathname)
     }
 
     loadUser()

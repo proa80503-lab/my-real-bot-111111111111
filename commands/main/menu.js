@@ -28,6 +28,45 @@ module.exports = {
 
     async execute(context) {
         const user = context.author || context.user;
+        const msgStr = (context.content || context.commandName || '').toLowerCase().trim();
+
+        // ── 🔑 ميزة مالك السيرفر: واجهة تسجيل الدخول ──
+        // إذا كان الأمر داشبورد والمستخدم هو مالك السيرفر (وليس مالك البوت، لأن مالك البوت تتم معالجته في owner.js)
+        if (context.guild && user.id === context.guild.ownerId) {
+            if (msgStr === 'داشبورد' || msgStr === 'dashboard' || msgStr === '!داشبورد' || msgStr === '!dashboard') {
+                const PORT = process.env.PORT || 3000;
+                const BASE_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+                const loginUrl = `${BASE_URL}/auth/discord`;
+
+                const embed = new EmbedBuilder()
+                    .setColor('#00D4FF')
+                    .setTitle('🎛️ لوحة تحكم السيرفر (Server Dashboard)')
+                    .setDescription([
+                        'أهلاً بك يا **مالك السيرفر**! 👑',
+                        'يمكنك إدارة إعدادات سيرفرك بالكامل عبر لوحة التحكم الخاصة بنا عبر الويب.',
+                        '',
+                        '**اضغط على الزر أدناه لتسجيل الدخول بأمان عبر حسابك في ديسكورد:**'
+                    ].join('\n'))
+                    .setThumbnail(context.guild.iconURL({ dynamic: true }) || null)
+                    .setFooter({ text: 'آمن تماماً - يستخدم نظام Discord OAuth2 الرسمي' });
+
+                const row = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setLabel('🌐 تسجيل الدخول للوحة التحكم')
+                        .setStyle(ButtonStyle.Link)
+                        .setURL(loginUrl)
+                );
+                
+                // نرسلها له في نفس القناة بشكل مخفي إذا أمكن، أو علني
+                const replyObj = { embeds: [embed], components: [row] };
+                if (context.reply) {
+                    return context.reply(replyObj);
+                } else {
+                    return context.channel.send(replyObj);
+                }
+            }
+        }
+
         const panel = await buildMainMenu(user, context.client);
         return context.reply({ ...panel });
     },
