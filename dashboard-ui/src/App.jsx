@@ -1,54 +1,130 @@
-import React, { useState, useEffect } from 'react'
-import Login from './components/Login'
-import Dashboard from './components/Dashboard'
+import React from 'react'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider, useAuth } from './auth'
+import LoginPage from './pages/LoginPage'
+import BotOwnerDashboard from './pages/BotOwnerDashboard'
+import ServerOwnerDashboard from './pages/ServerOwnerDashboard'
+import GuildSelector from './pages/GuildSelector'
+import StorePage from './pages/StorePage'
 import './index.css'
 
-function App() {
-  const [token, setToken] = useState(localStorage.getItem('dashboardToken'))
+// ─── Route Guards ─────────────────────────────────────────────────────────────
+function RequireAuth({ children, role }) {
+  const { user, loading } = useAuth()
 
-  useEffect(() => {
-    // If token passed in URL (auto-login from Discord)
-    const urlParams = new URLSearchParams(window.location.search);
-    const key = urlParams.get('key');
-    if (key) {
-      // Auto login
-      fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          localStorage.setItem('dashboardToken', data.token);
-          setToken(data.token);
-          // Remove key from URL
-          window.history.replaceState({}, document.title, window.location.pathname);
-        }
-      })
-      .catch(console.error);
-    }
-  }, []);
-
-  const handleLogin = (newToken) => {
-    localStorage.setItem('dashboardToken', newToken)
-    setToken(newToken)
+  if (loading) {
+    return (
+      <div className="loading-screen">
+        <div className="spinner" />
+        <div className="loading-text">جاري التحقق...</div>
+      </div>
+    )
   }
 
-  const handleLogout = () => {
-    localStorage.removeItem('dashboardToken')
-    setToken(null)
+  if (!user) return <Navigate to="/" replace />
+
+  if (role && user.role !== role && user.role !== 'bot_owner') {
+    return <Navigate to="/" replace />
   }
 
+  return children
+}
+
+function RequireBotOwner({ children }) {
+  const { user, loading } = useAuth()
+  if (loading) return <div className="loading-screen"><div className="spinner" /></div>
+  if (!user || user.role !== 'bot_owner') return <Navigate to="/" replace />
+  return children
+}
+
+// ─── Smart Home — يُعيد التوجيه حسب الـ Role ──────────────────────────────────
+function SmartHome() {
+  const { user, loading } = useAuth()
+
+  if (loading) {
+    return (
+      <div className="loading-screen">
+        <div className="spinner" />
+        <div className="loading-text">جاري التحميل...</div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <LoginPage onLogin={(token, role) => {
+      localStorage.setItem('token', token)
+      if (role) localStorage.setItem('role', role)
+      window.location.reload()
+    }} />
+  }
+
+  // Bot Owner → داشبورد البوت
+  if (user.role === 'bot_owner') {
+    return <Navigate to="/bot-owner" replace />
+  }
+
+  // Server Owner → اختيار السيرفر
+  if (user.role === 'server_owner') {
+    return <Navigate to="/guilds" replace />
+  }
+
+  // غير معروف
+  return <Navigate to="/" replace />
+}
+
+// ─── Main App ─────────────────────────────────────────────────────────────────
+function AppRoutes() {
   return (
-    <>
-      {token ? (
-        <Dashboard token={token} onLogout={handleLogout} />
-      ) : (
-        <Login onLogin={handleLogin} />
-      )}
-    </>
+    <Routes>
+      {/* صفحة دخول ذكية */}
+      <Route path="/" element={<SmartHome />} />
+
+      {/* Bot Owner Dashboard */}
+      <Route
+        path="/bot-owner"
+        element={
+          <RequireBotOwner>
+            <BotOwnerDashboard />
+          </RequireBotOwner>
+        }
+      />
+
+      {/* Server Owner — اختيار السيرفر */}
+      <Route
+        path="/guilds"
+        element={
+          <RequireAuth>
+            <GuildSelector />
+          </RequireAuth>
+        }
+      />
+
+      {/* Server Owner Dashboard — لكل سيرفر بشكل منفصل */}
+      <Route
+        path="/server/:guildId"
+        element={
+          <RequireAuth>
+            <ServerOwnerDashboard />
+          </RequireAuth>
+        }
+      />
+
+      {/* صفحات عامة */}
+      <Route path="/store" element={<StorePage />} />
+      <Route path="/auction" element={<StorePage />} />
+
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   )
 }
 
-export default App
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </BrowserRouter>
+  )
+}

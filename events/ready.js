@@ -91,6 +91,21 @@ module.exports = {
             }
         }, 3_000);
 
+        // ─── استعادة Color Channels (بعد 7 ثوانٍ — بدون إعادة إرسال إذا موجودة) ─
+        setTimeout(async () => {
+            try {
+                const colorSystem = require('../utils/color-system');
+                let restored = 0;
+                for (const guild of client.guilds.cache.values()) {
+                    await colorSystem.checkAndRestoreColorChannel(guild).catch(() => {});
+                    restored++;
+                }
+                console.log(`🎨 [ColorSystem] فحص ${restored} سيرفر — استعادة إذا لزم`);
+            } catch (err) {
+                console.warn('[ColorSystem] خطأ في الاستعادة:', err.message);
+            }
+        }, 7_000);
+
         // ─── إشعار المالك عبر DM (بعد 5 ثوانٍ) ────────────────────
         setTimeout(async () => {
             try {

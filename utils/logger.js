@@ -3,45 +3,59 @@ const db = require('./database');
 const config = require('../config');
 const channelResolver = require('./channel-resolver');
 
-// دالة لإرسال لوج إلى قناة السجلات — بذكاء عبر channel-resolver
+// ─── إرسال Log إلى قناة السجلات ───────────────────────────────────────────────
 async function sendLog(guild, embed) {
-    // نبحث عن قناة السجلات باستخدام channel-resolver للبحث الذكي
-    const logChannel = channelResolver.resolve(guild, 'logChannel');
+    if (!guild) return;
+
+    let logChannel = null;
+
+    // 1. استخدام logChannelId المحفوظ في DB أولاً (أدق)
+    try {
+        const guildData = db.getGuildData(guild.id);
+        const logId = guildData.logChannelId || guildData.logChannel;
+        if (logId) {
+            logChannel = guild.channels.cache.get(logId) || null;
+        }
+    } catch {}
+
+    // 2. Fallback — channel-resolver بالاسم
+    if (!logChannel) {
+        logChannel = channelResolver.resolve(guild, 'logChannel');
+    }
+
     if (!logChannel) return;
 
     try {
         await logChannel.send({ embeds: [embed] });
     } catch (error) {
-        // تجاهل أخطاء الصلاحيات بشكل صامت
-        if (error.code !== 50001) {
-            console.error('خطأ غير متوقع في السجلات:', error.message);
+        // 50001 = Missing Access — تجاهل بصمت
+        if (error.code !== 50001 && error.code !== 50013) {
+            console.error('[Logger] خطأ غير متوقع في السجلات:', error.message);
         }
     }
 }
 
-// دالة مساعدة للحصول على المنفذ من audit log
-async function getExecutor(guild, type, targetId = null) {
+// ─── Helper: جلب المنفذ من Audit Log بدقة ────────────────────────────────────
+async function getExecutor(guild, type, targetId = null, windowMs = 10000) {
     try {
-        // ننتظر قليلاً لأن Audit Log قد يتأخر
+        // ننتظر قليلاً لأن Audit Log قد يتأخر (Discord يأخذ ~1-2 ثانية)
         await new Promise(r => setTimeout(r, 1500));
 
-        const auditLogs = await guild.fetchAuditLogs({
-            type: type,
-            limit: 10
+        const auditLogs = await guild.fetchAuditLogs({ type, limit: 10 });
+
+        const entry = auditLogs.entries.find(e => {
+            // نافذة زمنية مناسبة لمنع ربط event قديم بعملية جديدة
+            const isRecent = (Date.now() - e.createdTimestamp) < windowMs;
+            const targetMatch = targetId
+                ? (e.target?.id === targetId || e.targetId === targetId)
+                : true;
+            return isRecent && targetMatch;
         });
 
-        const log = auditLogs.entries.find(entry => {
-            const isRecent = (Date.now() - entry.createdTimestamp) < 15000; // خلال 15 ثانية
-            const targetMatches = targetId ? (entry.target?.id === targetId || entry.targetId === targetId) : true;
-            return isRecent && targetMatches;
-        });
-
-        if (!log) return null;
-
-        return log.executor;
-    } catch (error) {
-        // console.error('Error fetching audit logs:', error);
-        return null;
+        if (!entry) return null;
+        return entry.executor;
+    } catch {
+        return null; // لا نخمن — نرجع null
     }
 }
 

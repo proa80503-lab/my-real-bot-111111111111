@@ -168,6 +168,11 @@ async function _handleSelectMenu(interaction) {
     if (id === 'help_select_category') {
         return _require('../commands/main/help')?.handleHelpInteraction(interaction);
     }
+    // Color System — اختيار اللون من قناة الألوان
+    if (id.startsWith('color_select_')) {
+        const colorSystem = _require('../utils/color-system');
+        return colorSystem?.handleColorSelect(interaction);
+    }
 
     // Select غير معروف
     if (!interaction.replied && !interaction.deferred) {

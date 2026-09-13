@@ -122,17 +122,99 @@ function addTransaction(userId, type, amount, description) {
 }
 function getGuildData(guildId) {
     let guild = stmt('SELECT * FROM guilds WHERE guild_id = ?').get(guildId);
-    if (!guild) { stmt('INSERT INTO guilds (guild_id) VALUES (?)').run(guildId); guild = stmt('SELECT * FROM guilds WHERE guild_id = ?').get(guildId); }
-    return { bankChannel: guild.bank_channel, jailRole: guild.jail_role, muteRole: guild.mute_role, logChannel: guild.log_channel, punishmentsChannel: guild.punishments_channel, gamesChannel: guild.games_channel, welcomeChannel: guild.welcome_channel, setupComplete: guild.setup_complete===1, prefix: guild.prefix, language: guild.language, economyEnabled: guild.economy_enabled===1, gamesEnabled: guild.games_enabled===1, aiEnabled: guild.ai_enabled===1, autoModEnabled: guild.auto_mod_enabled===1, antiSpamEnabled: guild.anti_spam_enabled===1, antiLinkEnabled: guild.anti_link_enabled===1, antiCapsEnabled: guild.anti_caps_enabled===1, antiRaidEnabled: guild.anti_raid_enabled===1 };
+    if (!guild) {
+        stmt('INSERT INTO guilds (guild_id) VALUES (?)').run(guildId);
+        guild = stmt('SELECT * FROM guilds WHERE guild_id = ?').get(guildId);
+    }
+    // Parse protection_settings JSON safely
+    let protectionSettings = {};
+    try { protectionSettings = JSON.parse(guild.protection_settings || '{}'); } catch {}
+    return {
+        bankChannel: guild.bank_channel,
+        jailRole: guild.jail_role,
+        muteRole: guild.mute_role,
+        logChannel: guild.log_channel,
+        punishmentsChannel: guild.punishments_channel,
+        gamesChannel: guild.games_channel,
+        welcomeChannel: guild.welcome_channel,
+        // ─── Color System ───────────────────────
+        colorChannelId: guild.color_channel_id || null,
+        colorMessageId: guild.color_message_id || null,
+        // ─── Log System ─────────────────────────
+        logChannelId: guild.log_channel_id || null,
+        // ─── Protection ─────────────────────────
+        protectionSettings,
+        // ─── Settings ───────────────────────────
+        setupComplete: guild.setup_complete === 1,
+        prefix: guild.prefix,
+        language: guild.language,
+        economyEnabled: guild.economy_enabled === 1,
+        gamesEnabled: guild.games_enabled === 1,
+        aiEnabled: guild.ai_enabled === 1,
+        autoModEnabled: guild.auto_mod_enabled === 1,
+        antiSpamEnabled: guild.anti_spam_enabled === 1,
+        antiLinkEnabled: guild.anti_link_enabled === 1,
+        antiCapsEnabled: guild.anti_caps_enabled === 1,
+        antiRaidEnabled: guild.anti_raid_enabled === 1,
+    };
 }
-const _GUILD_MAP = { bankChannel:'bank_channel', jailRole:'jail_role', muteRole:'mute_role', logChannel:'log_channel', punishmentsChannel:'punishments_channel', gamesChannel:'games_channel', welcomeChannel:'welcome_channel', setupComplete:'setup_complete', prefix:'prefix', language:'language', economyEnabled:'economy_enabled', gamesEnabled:'games_enabled', aiEnabled:'ai_enabled', autoModEnabled:'auto_mod_enabled', antiSpamEnabled:'anti_spam_enabled', antiLinkEnabled:'anti_link_enabled', antiCapsEnabled:'anti_caps_enabled', antiRaidEnabled:'anti_raid_enabled' };
-const _GUILD_BOOL = new Set(['setup_complete','economy_enabled','games_enabled','ai_enabled','auto_mod_enabled','anti_spam_enabled','anti_link_enabled','anti_caps_enabled','anti_raid_enabled']);
+
+const _GUILD_MAP = {
+    bankChannel: 'bank_channel', jailRole: 'jail_role', muteRole: 'mute_role',
+    logChannel: 'log_channel', punishmentsChannel: 'punishments_channel',
+    gamesChannel: 'games_channel', welcomeChannel: 'welcome_channel',
+    // ─── New fields ─────────────────────────
+    colorChannelId: 'color_channel_id', colorMessageId: 'color_message_id',
+    logChannelId: 'log_channel_id', protectionSettings: 'protection_settings',
+    // ─── Settings ───────────────────────────
+    setupComplete: 'setup_complete', prefix: 'prefix', language: 'language',
+    economyEnabled: 'economy_enabled', gamesEnabled: 'games_enabled',
+    aiEnabled: 'ai_enabled', autoModEnabled: 'auto_mod_enabled',
+    antiSpamEnabled: 'anti_spam_enabled', antiLinkEnabled: 'anti_link_enabled',
+    antiCapsEnabled: 'anti_caps_enabled', antiRaidEnabled: 'anti_raid_enabled',
+};
+const _GUILD_BOOL = new Set(['setup_complete','economy_enabled','games_enabled','ai_enabled',
+    'auto_mod_enabled','anti_spam_enabled','anti_link_enabled','anti_caps_enabled','anti_raid_enabled']);
+const _GUILD_JSON = new Set(['protection_settings']);
+
 function updateGuildData(guildId, data) {
     getGuildData(guildId);
-    const updates=[],values=[];
-    for(const[key,val]of Object.entries(data)){const col=_GUILD_MAP[key];if(col){updates.push(col+' = ?');values.push(_GUILD_BOOL.has(col)?((val)?1:0):val);}}
-    if(updates.length){updates.push('updated_at = unixepoch()');values.push(guildId);getDb().prepare('UPDATE guilds SET '+updates.join(', ')+' WHERE guild_id = ?').run(...values);}
+    const updates = [], values = [];
+    for (const [key, val] of Object.entries(data)) {
+        const col = _GUILD_MAP[key];
+        if (!col) continue;
+        let v = val;
+        if (_GUILD_BOOL.has(col)) v = val ? 1 : 0;
+        else if (_GUILD_JSON.has(col)) v = typeof val === 'string' ? val : JSON.stringify(val);
+        updates.push(col + ' = ?');
+        values.push(v);
+    }
+    if (updates.length) {
+        updates.push('updated_at = unixepoch()');
+        values.push(guildId);
+        getDb().prepare('UPDATE guilds SET ' + updates.join(', ') + ' WHERE guild_id = ?').run(...values);
+    }
     return getGuildData(guildId);
+}
+
+// ─── Web Sessions (OAuth) ───────────────────────────────────────────────────
+function createWebSession(token, userId, username, avatar, role, guildId, expiresAt) {
+    stmt('INSERT OR REPLACE INTO web_sessions (token, user_id, username, avatar, role, guild_id, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(token, userId, username, avatar, role, guildId || null, Math.floor(expiresAt / 1000));
+}
+function getWebSession(token) {
+    const row = stmt('SELECT * FROM web_sessions WHERE token = ?').get(token);
+    if (!row) return null;
+    if (row.expires_at * 1000 < Date.now()) {
+        stmt('DELETE FROM web_sessions WHERE token = ?').run(token);
+        return null;
+    }
+    return { token: row.token, userId: row.user_id, username: row.username, avatar: row.avatar, role: row.role, guildId: row.guild_id, expiresAt: row.expires_at * 1000 };
+}
+function deleteWebSession(token) {
+    stmt('DELETE FROM web_sessions WHERE token = ?').run(token);
+}
+function cleanExpiredSessions() {
+    stmt('DELETE FROM web_sessions WHERE expires_at < ?').run(Math.floor(Date.now() / 1000));
 }
 function getAllUsers() { const rows=stmt('SELECT user_id FROM users').all(); const result={}; for(const r of rows)result[r.user_id]=getUserData(r.user_id); return result; }
 function getLeaderboard(field='balance',limit=10) { const m={balance:'balance',bank:'bank',xp:'xp',level:'level'}; const col=m[field]||'balance'; return stmt('SELECT user_id, '+col+' as value FROM users ORDER BY '+col+' DESC LIMIT ?').all(limit); }
@@ -141,4 +223,13 @@ function saveDatabase() { return true; }
 function saveAll() {}
 process.on('SIGINT', ()=>{ if(_db)_db.close(); process.exit(0); });
 process.on('SIGTERM', ()=>{ if(_db)_db.close(); process.exit(0); });
-module.exports = { getDb, LIMITS, getUserData, updateUserData, updateFields, addMoney, removeMoney, addMoneyToBank, removeMoneyFromBank, transferMoney, addTransaction, getGuildData, updateGuildData, getAllUsers, getLeaderboard, loadDatabase, saveDatabase, saveAll };
+module.exports = {
+    getDb, LIMITS,
+    getUserData, updateUserData, updateFields,
+    addMoney, removeMoney, addMoneyToBank, removeMoneyFromBank, transferMoney, addTransaction,
+    getGuildData, updateGuildData,
+    getAllUsers, getLeaderboard,
+    loadDatabase, saveDatabase, saveAll,
+    // Web Sessions
+    createWebSession, getWebSession, deleteWebSession, cleanExpiredSessions,
+};
