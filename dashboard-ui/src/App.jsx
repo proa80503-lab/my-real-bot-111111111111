@@ -68,8 +68,19 @@ function SmartHome() {
     return <Navigate to="/guilds" replace />
   }
 
-  // غير معروف
-  return <Navigate to="/" replace />
+  // دور غير معروف — أظهر صفحة الخطأ بدلاً من إعادة التوجيه لتجنب الحلقة اللانهائية
+  return (
+    <div className="loading-screen">
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>⚠️</div>
+        <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>خطأ في صلاحيات الحساب</div>
+        <div style={{ color: 'var(--muted)', marginBottom: 20 }}>دور: {user.role}</div>
+        <button className="btn btn-outline" onClick={() => { localStorage.clear(); window.location.href = '/'; }}>
+          🚪 تسجيل خروج وإعادة المحاولة
+        </button>
+      </div>
+    </div>
+  )
 }
 
 // ─── Main App ─────────────────────────────────────────────────────────────────

@@ -34,15 +34,30 @@ export function AuthProvider({ children }) {
     const token = localStorage.getItem('token')
     if (!token) { setLoading(false); return }
     try {
-      const data = await apiFetch('/auth/me')
+      console.log('[Auth] Calling /api/auth/me...')
+      const res = await fetch(`${API}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      console.log('[Auth] /me status:', res.status)
+      if (res.status === 401 || res.status === 403) {
+        console.warn('[Auth] Token invalid/expired, removing...')
+        localStorage.removeItem('token')
+        localStorage.removeItem('role')
+        setLoading(false)
+        return
+      }
+      const data = await res.json()
+      console.log('[Auth] /me data:', data)
       if (data?.success) {
         setUser(data.user)
         setGuilds(data.guilds || [])
       } else {
+        console.warn('[Auth] /me returned success:false, removing token')
         localStorage.removeItem('token')
       }
-    } catch {
-      localStorage.removeItem('token')
+    } catch (e) {
+      console.error('[Auth] loadUser error:', e.message)
+      // لا نحذف التوكن في حالة خطأ الشبكة لتجنب تسجيل الخروج
     } finally {
       setLoading(false)
     }
@@ -56,12 +71,14 @@ export function AuthProvider({ children }) {
     const urlError = params.get('error')
 
     if (urlToken) {
+      console.log('[Auth] Got token from URL, saving to localStorage...')
       localStorage.setItem('token', urlToken)
       if (urlRole) localStorage.setItem('role', urlRole)
+      // حذف التوكن من الرابط قبل تحميل المستخدم
       window.history.replaceState({}, '', window.location.pathname)
     }
     if (urlError) {
-      console.error('OAuth error:', urlError)
+      console.error('[Auth] OAuth error from URL:', urlError)
       window.history.replaceState({}, '', window.location.pathname)
     }
 
