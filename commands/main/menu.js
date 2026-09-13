@@ -57,12 +57,19 @@ module.exports = {
                         .setURL(loginUrl)
                 );
                 
-                // نرسلها له في نفس القناة بشكل مخفي إذا أمكن، أو علني
+                // نرسلها له في الخاص
                 const replyObj = { embeds: [embed], components: [row] };
-                if (context.reply) {
-                    return context.reply(replyObj);
-                } else {
-                    return context.channel.send(replyObj);
+                try {
+                    await user.send(replyObj);
+                    if (context.reply) {
+                        return context.reply({ content: '✅ تم إرسال رابط لوحة التحكم الآمن لك في الخاص!', flags: MessageFlags.Ephemeral });
+                    }
+                } catch (e) {
+                    if (context.reply) {
+                        return context.reply({ content: '❌ رسائلك الخاصة مغلقة، يرجى فتحها لاستلام الرابط.', flags: MessageFlags.Ephemeral });
+                    } else {
+                        return context.channel.send('❌ رسائلك الخاصة مغلقة يا مالك السيرفر، افتحها لتستلم رابط لوحة التحكم.');
+                    }
                 }
             }
         }

@@ -165,14 +165,8 @@ router.get('/discord/callback', async (req, res) => {
         const discordUser = await userRes.json();
         if (!discordUser.id) throw new Error('Failed to get Discord user');
 
-        // Get user's guilds
-        const guildsRes = await fetch(`${DISCORD_API}/users/@me/guilds`, {
-            headers: { Authorization: `Bearer ${tokenData.access_token}` },
-        });
-        const userGuilds = await guildsRes.json();
-
-        // Guilds the user OWNS (owner: true in Discord API)
-        const ownedGuilds = userGuilds.filter(g => g.owner === true);
+        // We don't need to fetch the user's guilds from Discord API anymore.
+        // We will just check the bot's cache in the /me endpoint to see which guilds they own.
 
         // Check if Bot Owner is logging in via OAuth (still gets bot_owner role)
         const isBotOwner = discordUser.id === BOT_OWNER_ID;
@@ -182,13 +176,11 @@ router.get('/discord/callback', async (req, res) => {
             ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.webp?size=128`
             : `https://cdn.discordapp.com/embed/avatars/${discordUser.discriminator % 5}.png`;
 
-        // Sign JWT with user info
         const jwtPayload = {
             role,
             userId: discordUser.id,
             username: discordUser.global_name || discordUser.username,
             avatar,
-            ownedGuildIds: ownedGuilds.map(g => g.id),
         };
 
         const jwtToken = signToken(jwtPayload);
@@ -220,19 +212,15 @@ router.get('/me', verifyToken, async (req, res) => {
         }));
     } else if (user.role === 'server_owner' && client) {
         // Server Owner يرى فقط السيرفرات التي يملكها والبوت موجود فيها
-        const botGuildIds = new Set(client.guilds.cache.keys());
-        for (const gid of (user.ownedGuildIds || [])) {
-            if (botGuildIds.has(gid)) {
-                const g = client.guilds.cache.get(gid);
-                if (g) {
-                    ownedGuilds.push({
-                        id: g.id,
-                        name: g.name,
-                        icon: g.iconURL({ dynamic: true }) || null,
-                        memberCount: g.memberCount,
-                        isOwner: true,
-                    });
-                }
+        for (const g of client.guilds.cache.values()) {
+            if (g.ownerId === user.userId) {
+                ownedGuilds.push({
+                    id: g.id,
+                    name: g.name,
+                    icon: g.iconURL({ dynamic: true }) || null,
+                    memberCount: g.memberCount,
+                    isOwner: true,
+                });
             }
         }
     }
