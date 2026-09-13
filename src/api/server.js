@@ -40,9 +40,9 @@ app.use('/api/auth', authRouter);
 
 // Discord OAuth redirects (not under /api so browser can follow redirect)
 app.get('/auth/discord', (req, res) => res.redirect('/api/auth/discord'));
-app.get('/auth/discord/callback', (req, res, next) => {
-    req.url = '/discord/callback';
-    authRouter(req, res, next);
+app.get('/auth/discord/callback', (req, res) => {
+    const qs = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
+    res.redirect('/api/auth/discord/callback' + qs);
 });
 
 app.use('/api/bot-owner', botOwnerRouter);

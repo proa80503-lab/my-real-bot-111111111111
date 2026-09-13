@@ -23,7 +23,10 @@ const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || '';
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || '';
 
 // استخدم رابط رندر التلقائي إذا كان البوت مرفوعاً على منصة Render
-const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
+let RENDER_URL = process.env.RENDER_EXTERNAL_URL;
+if (RENDER_URL && RENDER_URL.endsWith('/')) {
+    RENDER_URL = RENDER_URL.slice(0, -1);
+}
 const DISCORD_REDIRECT_URI = process.env.DISCORD_REDIRECT_URI || (RENDER_URL ? `${RENDER_URL}/auth/discord/callback` : 'http://localhost:3000/auth/discord/callback');
 
 const DISCORD_API = 'https://discord.com/api/v10';
@@ -138,8 +141,12 @@ router.get('/discord', (req, res) => {
 router.get('/discord/callback', async (req, res) => {
     const { code, error } = req.query;
 
-    if (error || !code) {
+    if (error) {
         return res.redirect('/?error=discord_denied');
+    }
+    if (!code) {
+        // نمرر تفاصيل req.query كرسالة خطأ لنتمكن من التشخيص
+        return res.redirect(`/?error=no_code_received_query_is_${encodeURIComponent(JSON.stringify(req.query))}`);
     }
 
     try {
