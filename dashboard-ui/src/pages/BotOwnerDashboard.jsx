@@ -368,14 +368,14 @@ function WelcomeSection({ stats, toast }) {
           <div className="form-group">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <label style={{ fontSize: 13, margin: 0 }}>رابط صورة الترحيب (Background URL)</label>
-              <a href="https://postimages.org/" target="_blank" rel="noreferrer" className="btn btn-sm btn-primary" style={{ fontSize: 11, padding: '2px 8px' }}>
+              <a href="https://imgbb.com/" target="_blank" rel="noreferrer" className="btn btn-sm btn-primary" style={{ fontSize: 11, padding: '2px 8px' }}>
                 ☁️ موقع رفع الصور
               </a>
             </div>
             <input 
               type="text" 
               className="form-input" 
-              placeholder="https://i.postimg.cc/example.png" 
+              placeholder="https://i.ibb.co/example/image.png" 
               value={s.welcomeImage || ''} 
               onChange={e => setS({ ...s, welcomeImage: e.target.value })} 
             />
