@@ -26,11 +26,24 @@ async function sendWelcome(member) {
         if (settings.welcomeChannelId) {
             // الأولوية: الروم المحدد يدوياً من لوحة التحكم
             try {
-                const guild = settings.welcomeGuildId
-                    ? member.client.guilds.cache.get(settings.welcomeGuildId) || member.guild
-                    : member.guild;
+                let guild = null;
+                if (settings.welcomeGuildId) {
+                    // جرب الـ cache أولاً، ثم اجلب من Discord API
+                    guild = member.client.guilds.cache.get(settings.welcomeGuildId);
+                    if (!guild) {
+                        try { guild = await member.client.guilds.fetch(settings.welcomeGuildId); } catch {}
+                    }
+                }
+                guild = guild || member.guild;
+
+                // جلب القنوات إذا لم تكن في الـ cache
+                if (guild.channels.cache.size === 0) {
+                    try { await guild.channels.fetch(); } catch {}
+                }
                 welcomeChannel = guild.channels.cache.get(settings.welcomeChannelId);
-            } catch {}
+            } catch (e) {
+                console.error('[Welcome] خطأ في جلب السيرفر/القناة:', e.message);
+            }
         }
 
         if (!welcomeChannel) {

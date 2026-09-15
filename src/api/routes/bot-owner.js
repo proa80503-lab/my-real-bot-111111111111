@@ -1,4 +1,5 @@
 'use strict';
+const { ChannelType } = require('discord.js');
 
 /**
  * ════════════════════════════════════════════════════════
@@ -23,7 +24,7 @@ router.use(requireBotOwner);
 // ──────────────────────────────────────────────────────────────────────────────
 // Stats الشاملة للبوت
 // ──────────────────────────────────────────────────────────────────────────────
-router.get('/stats', (req, res) => {
+router.get('/stats', async (req, res) => {
     const client = req.app.get('client');
     const data = db.loadDatabase ? db.loadDatabase() : { users: {}, guilds: {} };
 
@@ -57,6 +58,11 @@ router.get('/stats', (req, res) => {
         }
     } catch {}
 
+    // تأكد من تحديث الـ cache بجلب كل السيرفرات من Discord
+    if (client?.isReady() && client.guilds.cache.size === 0) {
+        try { await client.guilds.fetch(); } catch {}
+    }
+
     // إحصائيات السيرفرات
     const guilds = client?.guilds?.cache?.map(g => ({
         id: g.id,
@@ -88,14 +94,22 @@ router.get('/stats', (req, res) => {
             logs,
             guilds,
             // قائمة قنوات جميع السيرفرات لاختيار روم الترحيب
-            guildChannels: client?.guilds?.cache?.map(g => ({
-                guildId: g.id,
-                guildName: g.name,
-                channels: g.channels.cache
-                    .filter(ch => ch.type === 0) // text channels only
-                    .map(ch => ({ id: ch.id, name: ch.name }))
-                    .sort((a, b) => a.name.localeCompare(b.name))
-            })) || [],
+            // نجلب القنوات من Discord API إذا لم تكن في الـ cache
+            guildChannels: await Promise.all(
+                (client?.guilds?.cache?.map(async g => {
+                    if (g.channels.cache.size === 0) {
+                        try { await g.channels.fetch(); } catch {}
+                    }
+                    return {
+                        guildId: g.id,
+                        guildName: g.name,
+                        channels: g.channels.cache
+                            .filter(ch => ch.type === ChannelType.GuildText)
+                            .map(ch => ({ id: ch.id, name: ch.name }))
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                    };
+                }) || [])
+            ),
             botSettings: botSettings.getAll(),
         },
     });
@@ -246,15 +260,15 @@ router.delete('/response/:id', (req, res) => {
 // ──────────────────────────────────────────────────────────────────────────────
 router.post('/test-welcome', async (req, res) => {
     const client = req.app.get('client');
-    if (!client) return res.status(503).json({ success: false, error: 'Bot offline' });
+    if (!client?.isReady()) return res.status(503).json({ success: false, error: 'البوت أوفلاين حالياً — انتظر حتى يتصل بديسكورد.' });
 
     try {
         const { sendWelcome } = require('../../../utils/welcome');
         const settings = botSettings.getAll();
 
         // ── تحديد السيرفر والروم من الإعدادات المحفوظة ──────────────────────────
-        const guildId   = settings.welcomeGuildId;
-        const channelId = settings.welcomeChannelId;
+        const guildId   = String(settings.welcomeGuildId  || '').trim();
+        const channelId = String(settings.welcomeChannelId || '').trim();
 
         if (!guildId || !channelId) {
             return res.status(400).json({
@@ -263,31 +277,43 @@ router.post('/test-welcome', async (req, res) => {
             });
         }
 
-        const guild = client.guilds.cache.get(guildId);
+        // ── جلب السيرفر (cache أولاً ثم fetch من Discord API) ────────────────
+        let guild = client.guilds.cache.get(guildId);
         if (!guild) {
-            return res.status(404).json({ success: false, error: `لم يجد البوت السيرفر (${guildId}) — تأكد أن البوت مازال فيه.` });
+            try { guild = await client.guilds.fetch(guildId); } catch {}
+        }
+        if (!guild) {
+            return res.status(404).json({
+                success: false,
+                error: `لم يجد البوت السيرفر (ID: ${guildId}). تأكد أن البوت مازال فيه وأن الـ ID صحيح.`
+            });
         }
 
+        // ── جلب قنوات السيرفر إذا لم تكن في الـ cache ───────────────────────
+        if (guild.channels.cache.size === 0) {
+            try { await guild.channels.fetch(); } catch {}
+        }
         const channel = guild.channels.cache.get(channelId);
         if (!channel) {
-            return res.status(404).json({ success: false, error: `لم يجد البوت الروم (${channelId}) في السيرفر.` });
+            return res.status(404).json({
+                success: false,
+                error: `لم يجد البوت الروم (ID: ${channelId}) في السيرفر. تأكد من اختيار الروم الصحيح وحفظه.`
+            });
         }
 
         // ── جلب مالك البوت كعضو لاستخدام صورته في التجربة ────────────────────
         let testMember = null;
         try { testMember = await guild.members.fetch(req.user.id); } catch {}
         if (!testMember) {
-            // احتياطي: أي عضو موجود في السيرفر
-            const members = await guild.members.fetch({ limit: 5 });
-            testMember = members.first();
+            // احتياطي: البوت نفسه
+            try { testMember = await guild.members.fetch(client.user.id); } catch {}
         }
-
         if (!testMember) {
-            return res.status(404).json({ success: false, error: 'لا يوجد أعضاء في السيرفر لاستخدامهم في التجربة.' });
+            return res.status(404).json({ success: false, error: 'فشل جلب أعضاء السيرفر. تأكد من تفعيل Server Members Intent.' });
         }
 
         await sendWelcome(testMember);
-        res.json({ success: true, message: `تم إرسال التجربة إلى #${channel.name} في ${guild.name}` });
+        res.json({ success: true, message: `✅ تم إرسال التجربة إلى #${channel.name} في ${guild.name}` });
     } catch (err) {
         console.error('[test-welcome]', err);
         res.status(500).json({ success: false, error: err.message });
