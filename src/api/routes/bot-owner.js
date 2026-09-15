@@ -239,10 +239,16 @@ router.post('/test-welcome', async (req, res) => {
 
     try {
         const { sendWelcome } = require('../../../utils/welcome');
-        // Find any guild the bot and the owner share
+        // Find a guild the bot and the owner share THAT ALSO HAS a welcome channel
         let testMember = null;
         for (const guild of client.guilds.cache.values()) {
             try {
+                const hasChannel = guild.channels.cache.some(
+                    ch => ch.name === 'الترحيب' || ch.name === 'welcome' || ch.name === '👋┃الترحيب'
+                ) || guild.systemChannel;
+                
+                if (!hasChannel) continue;
+
                 const member = await guild.members.fetch(req.user.id);
                 if (member) {
                     testMember = member;
