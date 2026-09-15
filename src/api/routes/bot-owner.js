@@ -102,7 +102,8 @@ router.post('/settings', (req, res) => {
         'challengeInterval', 'moodMessageInterval', 'aiRandomReplyFrequency',
         'aiRandomReplyEnabled', 'dailyReminderEnabled', 'dailySummaryEnabled',
         'antiRaidAccountAgeEnabled', 'welcomeImage', 'welcomeAvatarX',
-        'welcomeAvatarY', 'welcomeAvatarWidth', 'welcomeAvatarHeight', 'welcomeAvatarRadius'
+        'welcomeAvatarY', 'welcomeAvatarWidth', 'welcomeAvatarHeight', 'welcomeAvatarRadius',
+        'savedWelcomeDesigns'
     ];
 
     for (const key of allowed) {

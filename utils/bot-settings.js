@@ -56,6 +56,7 @@ const DEFAULTS = {
     welcomeAvatarWidth: 256,
     welcomeAvatarHeight: 256,
     welcomeAvatarRadius: 50,
+    savedWelcomeDesigns: [], // [{ id, name, image, x, y, w, h, radius }]
 
     // إعدادات Dashboard
     dashboardKey: '',                 // يُملأ من .env أو يُولَّد مرة واحدة

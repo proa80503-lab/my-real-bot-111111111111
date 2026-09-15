@@ -323,9 +323,11 @@ function WelcomeSection({ stats, toast }) {
     welcomeAvatarWidth: 256,
     welcomeAvatarHeight: 256,
     welcomeAvatarRadius: 50,
+    savedWelcomeDesigns: [],
     ...settings,
   })
   const [saving, setSaving] = useState(false)
+  const [designName, setDesignName] = useState('')
 
   useEffect(() => {
     if (settings && Object.keys(settings).length > 0) setS(prev => ({ ...prev, ...settings }))
@@ -347,6 +349,48 @@ function WelcomeSection({ stats, toast }) {
     else toast(res?.error || 'حدث خطأ أثناء إرسال التجربة', 'error')
   }
 
+  const saveDesign = async () => {
+    if (!designName) return toast('يرجى كتابة اسم للتصميم أولاً', 'error')
+    if (!s.welcomeImage) return toast('لا توجد صورة لحفظها', 'error')
+    const newDesign = {
+      id: Date.now().toString(),
+      name: designName,
+      image: s.welcomeImage,
+      x: s.welcomeAvatarX,
+      y: s.welcomeAvatarY,
+      w: s.welcomeAvatarWidth,
+      h: s.welcomeAvatarHeight,
+      r: s.welcomeAvatarRadius
+    }
+    const newDesigns = [...(s.savedWelcomeDesigns || []), newDesign]
+    setS({ ...s, savedWelcomeDesigns: newDesigns })
+    setDesignName('')
+    
+    // Save to server directly
+    await apiFetch('/bot-owner/settings', { method: 'POST', body: JSON.stringify({ savedWelcomeDesigns: newDesigns }) })
+    toast('تم حفظ التصميم في المعرض ✅', 'success')
+  }
+
+  const applyDesign = (d) => {
+    setS({
+      ...s,
+      welcomeImage: d.image,
+      welcomeAvatarX: d.x,
+      welcomeAvatarY: d.y,
+      welcomeAvatarWidth: d.w,
+      welcomeAvatarHeight: d.h,
+      welcomeAvatarRadius: d.r
+    })
+    toast('تم تحميل التصميم! لا تنس الضغط على حفظ الترحيب.', 'info')
+  }
+
+  const deleteDesign = async (id) => {
+    const newDesigns = (s.savedWelcomeDesigns || []).filter(d => d.id !== id)
+    setS({ ...s, savedWelcomeDesigns: newDesigns })
+    await apiFetch('/bot-owner/settings', { method: 'POST', body: JSON.stringify({ savedWelcomeDesigns: newDesigns }) })
+    toast('تم حذف التصميم', 'info')
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -356,7 +400,7 @@ function WelcomeSection({ stats, toast }) {
             🧪 تجربة الترحيب
           </button>
           <button className="btn btn-success" onClick={save} disabled={saving}>
-            {saving ? '⏳ حفظ...' : '💾 حفظ الترحيب'}
+            {saving ? '⏳ حفظ...' : '💾 حفظ وتطبيق'}
           </button>
         </div>
       </div>
@@ -479,6 +523,44 @@ function WelcomeSection({ stats, toast }) {
           <div style={{ marginTop: 12, fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>
             * يتم حساب المواقع بناءً على دقة شاشة 1920x1080.
           </div>
+        </div>
+      </div>
+
+      {/* معرض التصاميم المحفوظة */}
+      <div className="card" style={{ marginTop: 20 }}>
+        <div className="card-header"><span className="card-icon">📚</span><div className="card-title">معرض التصاميم المحفوظة</div></div>
+        
+        <div style={{ display: 'flex', gap: 10, marginBottom: 20, alignItems: 'center' }}>
+          <input 
+            type="text" 
+            className="form-input" 
+            placeholder="اسم التصميم (مثال: ترحيب العيد)" 
+            value={designName}
+            onChange={e => setDesignName(e.target.value)}
+            style={{ maxWidth: 300 }}
+          />
+          <button className="btn btn-primary" onClick={saveDesign}>
+            💾 حفظ التصميم الحالي في المعرض
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          {(!s.savedWelcomeDesigns || s.savedWelcomeDesigns.length === 0) ? (
+            <div style={{ color: 'var(--muted)', fontSize: 13, width: '100%', textAlign: 'center', padding: '20px 0' }}>
+              لا توجد تصاميم محفوظة حالياً.
+            </div>
+          ) : s.savedWelcomeDesigns.map(d => (
+            <div key={d.id} style={{ width: 240, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+              <div style={{ width: '100%', aspectRatio: '16/9', backgroundImage: `url(${d.image})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+              <div style={{ padding: 12 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn btn-sm btn-success" style={{ flex: 1 }} onClick={() => applyDesign(d)}>تطبيق</button>
+                  <button className="btn btn-sm btn-danger" onClick={() => deleteDesign(d.id)}>🗑️</button>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
