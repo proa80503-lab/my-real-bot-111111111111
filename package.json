@@ -14,7 +14,7 @@
     "@discord-player/extractor": "^7.1.0",
     "@discordjs/opus": "^0.10.0",
     "@discordjs/voice": "^0.18.0",
-    "axios": "^1.12.2",
+    "axios": "^1.20.0",
     "better-sqlite3": "^13.0.3",
     "canvas": "^3.2.3",
     "cors": "^2.8.6",

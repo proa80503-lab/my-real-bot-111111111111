@@ -3,6 +3,18 @@ const config = require('../config');
 const botSettings = require('./bot-settings');
 const { createCanvas, loadImage } = require('canvas');
 
+// دالة مساعدة لجلب الصور (لتخطي حماية Discord و ImgBB للـ Canvas)
+async function fetchImageBuffer(url) {
+    const res = await fetch(url, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+    });
+    if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`);
+    const arrayBuffer = await res.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+}
+
 // رسالة ترحيب للأعضاء الجدد
 async function sendWelcome(member) {
     try {
@@ -23,7 +35,8 @@ async function sendWelcome(member) {
                 const ctx = canvas.getContext('2d');
 
                 // 1. Draw Background
-                const bgImage = await loadImage(settings.welcomeImage);
+                const bgBuffer = await fetchImageBuffer(settings.welcomeImage);
+                const bgImage = await loadImage(bgBuffer);
                 ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
 
                 // 2. Avatar Settings
@@ -58,7 +71,9 @@ async function sendWelcome(member) {
                 ctx.clip();
 
                 // Fetch avatar at size 256 to ensure good quality
-                const avatarImg = await loadImage(member.user.displayAvatarURL({ extension: 'png', size: 256 }));
+                const avatarUrl = member.user.displayAvatarURL({ extension: 'png', size: 256 });
+                const avatarBuffer = await fetchImageBuffer(avatarUrl);
+                const avatarImg = await loadImage(avatarBuffer);
                 ctx.drawImage(avatarImg, startX, startY, aWidth, aHeight);
                 ctx.restore();
 
