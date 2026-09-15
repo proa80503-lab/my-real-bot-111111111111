@@ -35,7 +35,8 @@ async function sendWelcome(member) {
                 const ctx = canvas.getContext('2d');
 
                 // 1. Draw Background
-                const bgBuffer = await fetchImageBuffer(settings.welcomeImage);
+                const bgUrl = settings.welcomeImage.trim();
+                const bgBuffer = await fetchImageBuffer(bgUrl);
                 const bgImage = await loadImage(bgBuffer);
                 ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
 

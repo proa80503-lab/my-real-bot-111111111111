@@ -484,7 +484,7 @@ function WelcomeSection({ stats, toast }) {
             width: '100%',
             aspectRatio: '16/9',
             backgroundColor: '#111',
-            backgroundImage: s.welcomeImage ? `url(${s.welcomeImage})` : 'none',
+            backgroundImage: s.welcomeImage ? `url("${s.welcomeImage.trim()}")` : 'none',
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             borderRadius: 8,
