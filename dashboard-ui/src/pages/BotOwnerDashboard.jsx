@@ -320,7 +320,8 @@ function WelcomeSection({ stats, toast }) {
     welcomeImage: '',
     welcomeAvatarX: 0,
     welcomeAvatarY: 0,
-    welcomeAvatarSize: 128,
+    welcomeAvatarWidth: 256,
+    welcomeAvatarHeight: 256,
     welcomeAvatarRadius: 50,
     ...settings,
   })
@@ -383,11 +384,21 @@ function WelcomeSection({ stats, toast }) {
           </div>
 
           <div className="form-group">
-            <label style={{ fontSize: 13, marginBottom: 8, display: 'block' }}>حجم صورة العضو (Size): {s.welcomeAvatarSize}</label>
+            <label style={{ fontSize: 13, marginBottom: 8, display: 'block' }}>عرض الصورة (Width): {s.welcomeAvatarWidth}</label>
             <input 
-              type="range" min="50" max="500" 
-              value={s.welcomeAvatarSize || 128} 
-              onChange={e => setS({ ...s, welcomeAvatarSize: parseInt(e.target.value) })} 
+              type="range" min="50" max="1920" 
+              value={s.welcomeAvatarWidth || 256} 
+              onChange={e => setS({ ...s, welcomeAvatarWidth: parseInt(e.target.value) })} 
+              style={{ width: '100%' }}
+            />
+          </div>
+
+          <div className="form-group">
+            <label style={{ fontSize: 13, marginBottom: 8, display: 'block' }}>طول الصورة (Height): {s.welcomeAvatarHeight}</label>
+            <input 
+              type="range" min="50" max="1080" 
+              value={s.welcomeAvatarHeight || 256} 
+              onChange={e => setS({ ...s, welcomeAvatarHeight: parseInt(e.target.value) })} 
               style={{ width: '100%' }}
             />
           </div>
@@ -424,9 +435,8 @@ function WelcomeSection({ stats, toast }) {
                   position: 'absolute',
                   left: `${(s.welcomeAvatarX / 1920) * 100}%`,
                   top: `${(s.welcomeAvatarY / 1080) * 100}%`,
-                  width: `${(s.welcomeAvatarSize / 1920) * 100}%`,
-                  height: `${(s.welcomeAvatarSize / 1920) * 100}%`,
-                  aspectRatio: '1/1',
+                  width: `${(s.welcomeAvatarWidth / 1920) * 100}%`,
+                  height: `${(s.welcomeAvatarHeight / 1080) * 100}%`,
                   backgroundColor: 'rgba(255, 255, 255, 0.8)',
                   borderRadius: `${s.welcomeAvatarRadius}%`,
                   border: '3px solid #00FF00',

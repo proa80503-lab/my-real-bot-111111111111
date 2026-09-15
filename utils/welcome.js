@@ -29,33 +29,37 @@ async function sendWelcome(member) {
                 // 2. Avatar Settings
                 const aX = settings.welcomeAvatarX || 960;
                 const aY = settings.welcomeAvatarY || 540;
-                const aSize = settings.welcomeAvatarSize || 256;
+                const aWidth = settings.welcomeAvatarWidth || 256;
+                const aHeight = settings.welcomeAvatarHeight || 256;
                 const aRadiusPercent = settings.welcomeAvatarRadius || 50;
 
                 // 3. Calculate positioning (X, Y are center)
-                const startX = aX - (aSize / 2);
-                const startY = aY - (aSize / 2);
+                const startX = aX - (aWidth / 2);
+                const startY = aY - (aHeight / 2);
                 
                 // Border radius calculation
-                const cornerRadius = (aRadiusPercent / 100) * aSize;
+                // For a rectangle, the maximum border radius is half the smaller dimension
+                const maxRadius = Math.min(aWidth, aHeight) / 2;
+                const cornerRadius = (aRadiusPercent / 50) * maxRadius; // 50% = maxRadius
 
                 // 4. Draw Avatar with rounded corners
                 ctx.save();
                 ctx.beginPath();
                 ctx.moveTo(startX + cornerRadius, startY);
-                ctx.lineTo(startX + aSize - cornerRadius, startY);
-                ctx.quadraticCurveTo(startX + aSize, startY, startX + aSize, startY + cornerRadius);
-                ctx.lineTo(startX + aSize, startY + aSize - cornerRadius);
-                ctx.quadraticCurveTo(startX + aSize, startY + aSize, startX + aSize - cornerRadius, startY + aSize);
-                ctx.lineTo(startX + cornerRadius, startY + aSize);
-                ctx.quadraticCurveTo(startX, startY + aSize, startX, startY + aSize - cornerRadius);
+                ctx.lineTo(startX + aWidth - cornerRadius, startY);
+                ctx.quadraticCurveTo(startX + aWidth, startY, startX + aWidth, startY + cornerRadius);
+                ctx.lineTo(startX + aWidth, startY + aHeight - cornerRadius);
+                ctx.quadraticCurveTo(startX + aWidth, startY + aHeight, startX + aWidth - cornerRadius, startY + aHeight);
+                ctx.lineTo(startX + cornerRadius, startY + aHeight);
+                ctx.quadraticCurveTo(startX, startY + aHeight, startX, startY + aHeight - cornerRadius);
                 ctx.lineTo(startX, startY + cornerRadius);
                 ctx.quadraticCurveTo(startX, startY, startX + cornerRadius, startY);
                 ctx.closePath();
                 ctx.clip();
 
-                const avatarImg = await loadImage(member.user.displayAvatarURL({ extension: 'png', size: aSize }));
-                ctx.drawImage(avatarImg, startX, startY, aSize, aSize);
+                // Fetch avatar at size 256 to ensure good quality
+                const avatarImg = await loadImage(member.user.displayAvatarURL({ extension: 'png', size: 256 }));
+                ctx.drawImage(avatarImg, startX, startY, aWidth, aHeight);
                 ctx.restore();
 
                 // Generate Buffer

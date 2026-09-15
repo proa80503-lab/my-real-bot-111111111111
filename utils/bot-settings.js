@@ -53,7 +53,8 @@ const DEFAULTS = {
     welcomeImage: '',
     welcomeAvatarX: 0,
     welcomeAvatarY: 0,
-    welcomeAvatarSize: 128,
+    welcomeAvatarWidth: 256,
+    welcomeAvatarHeight: 256,
     welcomeAvatarRadius: 50,
 
     // إعدادات Dashboard
