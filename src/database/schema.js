@@ -133,6 +133,12 @@ function initializeSchema(db) {
     if (!guildCols.includes('welcome_avatar_radius'))
         db.exec("ALTER TABLE guilds ADD COLUMN welcome_avatar_radius INTEGER NOT NULL DEFAULT 50");
 
+    // ─── bot_settings — إعدادات صاحب البوت ───────────────────────────────────────
+    db.exec(`CREATE TABLE IF NOT EXISTS bot_settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL DEFAULT ''
+    )`);
+
     // ─── Clans ───────────────────────────────────────────────────────────────
     db.exec(`CREATE TABLE IF NOT EXISTS clans (
         clan_id TEXT PRIMARY KEY,

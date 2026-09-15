@@ -1,62 +1,77 @@
 const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
-const config = require('../config');
-const botSettings = require('./bot-settings');
+const config      = require('../config');
+const botSettings = require('../src/database/bot-settings-db');
 const { createCanvas, loadImage } = require('canvas');
 
-// دالة مساعدة لجلب الصور (لتخطي حماية Discord و ImgBB للـ Canvas)
+// دالة مساعدة لجلب الصور كـ Buffer (تتخطى حماية Discord وImgBB)
 async function fetchImageBuffer(url) {
     const res = await fetch(url, {
-        headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
     });
-    if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`);
-    const arrayBuffer = await res.arrayBuffer();
-    return Buffer.from(arrayBuffer);
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return Buffer.from(await res.arrayBuffer());
 }
 
-// رسالة ترحيب للأعضاء الجدد
+/**
+ * إرسال رسالة الترحيب مع الصورة
+ * @param {import('discord.js').GuildMember} member
+ */
 async function sendWelcome(member) {
     try {
-        // البحث عن قناة الترحيب
-        const welcomeChannel = member.guild.channels.cache.find(
-            ch => ch.name === 'الترحيب' || ch.name === 'welcome' || ch.name === '👋┃الترحيب'
-        ) || member.guild.systemChannel;
-
-        if (!welcomeChannel) return;
-
-        // ─── Generate Welcome Image ──────────────────────────────────────────
         const settings = botSettings.getAll();
-        let attachment = null;
 
-        if (settings.welcomeImage) {
+        // ── تحديد قناة الترحيب ──────────────────────────────────────────────────
+        let welcomeChannel = null;
+
+        if (settings.welcomeChannelId) {
+            // الأولوية: الروم المحدد يدوياً من لوحة التحكم
+            try {
+                const guild = settings.welcomeGuildId
+                    ? member.client.guilds.cache.get(settings.welcomeGuildId) || member.guild
+                    : member.guild;
+                welcomeChannel = guild.channels.cache.get(settings.welcomeChannelId);
+            } catch {}
+        }
+
+        if (!welcomeChannel) {
+            // الاحتياطي: أي روم اسمه الترحيب أو النظام
+            welcomeChannel = member.guild.channels.cache.find(
+                ch => ch.name === 'الترحيب' || ch.name === 'welcome' || ch.name === '👋┃الترحيب'
+            ) || member.guild.systemChannel;
+        }
+
+        if (!welcomeChannel) {
+            console.warn('[Welcome] ⚠️ لم يتم العثور على قناة ترحيب — تأكد من ضبط Channel ID في لوحة التحكم');
+            return;
+        }
+
+        // ── بناء صورة الترحيب ───────────────────────────────────────────────────
+        let attachment = null;
+        const imageUrl = (settings.welcomeImage || '').trim();
+
+        if (imageUrl) {
             try {
                 const canvas = createCanvas(1920, 1080);
-                const ctx = canvas.getContext('2d');
+                const ctx    = canvas.getContext('2d');
 
-                // 1. Draw Background
-                const bgUrl = settings.welcomeImage.trim();
-                const bgBuffer = await fetchImageBuffer(bgUrl);
-                const bgImage = await loadImage(bgBuffer);
+                // 1. خلفية
+                const bgBuffer = await fetchImageBuffer(imageUrl);
+                const bgImage  = await loadImage(bgBuffer);
                 ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
 
-                // 2. Avatar Settings
-                const aX = settings.welcomeAvatarX || 960;
-                const aY = settings.welcomeAvatarY || 540;
-                const aWidth = settings.welcomeAvatarWidth || 256;
-                const aHeight = settings.welcomeAvatarHeight || 256;
-                const aRadiusPercent = settings.welcomeAvatarRadius || 50;
+                // 2. إعدادات الصورة الرمزية
+                const aX      = Number(settings.welcomeAvatarX)      || 960;
+                const aY      = Number(settings.welcomeAvatarY)      || 540;
+                const aWidth  = Number(settings.welcomeAvatarWidth)  || 256;
+                const aHeight = Number(settings.welcomeAvatarHeight) || 256;
+                const aRadius = Number(settings.welcomeAvatarRadius) || 50;
 
-                // 3. Calculate positioning (X, Y are center)
-                const startX = aX - (aWidth / 2);
-                const startY = aY - (aHeight / 2);
-                
-                // Border radius calculation
-                // For a rectangle, the maximum border radius is half the smaller dimension
-                const maxRadius = Math.min(aWidth, aHeight) / 2;
-                const cornerRadius = (aRadiusPercent / 50) * maxRadius; // 50% = maxRadius
+                const startX       = aX - aWidth  / 2;
+                const startY       = aY - aHeight / 2;
+                const maxRadius    = Math.min(aWidth, aHeight) / 2;
+                const cornerRadius = (aRadius / 50) * maxRadius;
 
-                // 4. Draw Avatar with rounded corners
+                // 3. قص مستدير
                 ctx.save();
                 ctx.beginPath();
                 ctx.moveTo(startX + cornerRadius, startY);
@@ -71,62 +86,51 @@ async function sendWelcome(member) {
                 ctx.closePath();
                 ctx.clip();
 
-                // Fetch avatar at size 256 to ensure good quality
+                // 4. رسم الصورة الرمزية
                 const avatarUrl = member.user.displayAvatarURL({ extension: 'png', size: 256 });
-                const avatarBuffer = await fetchImageBuffer(avatarUrl);
-                const avatarImg = await loadImage(avatarBuffer);
+                const avBuffer  = await fetchImageBuffer(avatarUrl);
+                const avatarImg = await loadImage(avBuffer);
                 ctx.drawImage(avatarImg, startX, startY, aWidth, aHeight);
                 ctx.restore();
 
-                // Generate Buffer
-                const buffer = canvas.toBuffer('image/png');
-                attachment = new AttachmentBuilder(buffer, { name: 'welcome.png' });
+                attachment = new AttachmentBuilder(canvas.toBuffer('image/png'), { name: 'welcome.png' });
+                console.log('[Welcome] ✅ تم إنشاء صورة الترحيب');
             } catch (err) {
-                console.error('[Welcome Image Error]', err.message);
+                console.error('[Welcome] ❌ فشل إنشاء الصورة:', err.message);
             }
+        } else {
+            console.warn('[Welcome] ⚠️ لا توجد صورة ترحيب مضبوطة في الإعدادات');
         }
 
-        const messagePayload = {
+        // ── إرسال الرسالة ────────────────────────────────────────────────────────
+        const payload = {
             content: `||@everyone|| 🎊 مرحباً بك يا ${member}! نورت سيرفر **${member.guild.name}**!`,
         };
+        if (attachment) payload.files = [attachment];
+        await welcomeChannel.send(payload);
+        console.log(`[Welcome] ✅ تم إرسال ترحيب لـ ${member.user.tag} في #${welcomeChannel.name}`);
 
-        if (attachment) {
-            messagePayload.files = [attachment];
-        }
-
-        await welcomeChannel.send(messagePayload);
-
-        // رسالة خاصة للعضو
+        // ── رسالة خاصة ──────────────────────────────────────────────────────────
         try {
             const dmEmbed = new EmbedBuilder()
                 .setColor('#9B59B6')
                 .setTitle(`مرحباً بك في ${member.guild.name}! 👋`)
                 .setDescription(`أهلاً ${member.user.username}! نحن سعداء جداً بانضمامك!`)
                 .addFields(
-                    {
-                        name: '🎮 ابدأ الآن',
-                        value: 'توجه إلى السيرفر واكتب:\n• `تفعيل` - لإعداد حسابك\n• `يومي` - للحصول على مكافأة يومية\n• `!help` - لرؤية جميع الأوامر'
-                    },
-                    {
-                        name: '💰 مكافأة الانضمام',
-                        value: `لقد حصلت على **${config.startBalance} ${config.currency}** كمكافأة ترحيب!`
-                    },
-                    {
-                        name: '📜 القوانين',
-                        value: 'تأكد من قراءة قوانين السيرفر واحترامها!'
-                    }
+                    { name: '🎮 ابدأ الآن', value: '• `تفعيل` - لإعداد حسابك\n• `يومي` - للحصول على مكافأة يومية\n• `!help` - لرؤية جميع الأوامر' },
+                    { name: '💰 مكافأة الانضمام', value: `لقد حصلت على **${config.startBalance} ${config.currency}** كمكافأة ترحيب!` },
+                    { name: '📜 القوانين', value: 'تأكد من قراءة قوانين السيرفر واحترامها!' }
                 )
                 .setThumbnail(member.guild.iconURL())
                 .setFooter({ text: 'استمتع بوقتك معنا!' })
                 .setTimestamp();
-
             await member.send({ embeds: [dmEmbed] });
-        } catch (error) {
-            console.log(`لا يمكن إرسال رسالة خاصة لـ ${member.user.tag}`);
+        } catch {
+            console.log(`[Welcome] ℹ️ لا يمكن إرسال DM لـ ${member.user.tag}`);
         }
 
     } catch (error) {
-        console.error('خطأ في رسالة الترحيب:', error);
+        console.error('[Welcome] ❌ خطأ عام:', error);
     }
 }
 

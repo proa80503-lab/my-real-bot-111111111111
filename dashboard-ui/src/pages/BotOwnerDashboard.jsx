@@ -315,11 +315,15 @@ function ResponsesSection({ toast }) {
 
 // ─── Welcome Settings ─────────────────────────────────────────────────────────
 function WelcomeSection({ stats, toast }) {
-  const settings = stats?.botSettings || {}
+  const settings   = stats?.botSettings || {}
+  const guildChannels = stats?.guildChannels || []
+
   const [s, setS] = useState({
+    welcomeGuildId:   '',
+    welcomeChannelId: '',
     welcomeImage: '',
-    welcomeAvatarX: 0,
-    welcomeAvatarY: 0,
+    welcomeAvatarX: 960,
+    welcomeAvatarY: 540,
     welcomeAvatarWidth: 256,
     welcomeAvatarHeight: 256,
     welcomeAvatarRadius: 50,
@@ -410,8 +414,31 @@ function WelcomeSection({ stats, toast }) {
           <div className="card-header"><span className="card-icon">⚙️</span><div className="card-title">الإعدادات</div></div>
           
           <div className="form-group">
+            <label style={{ fontSize: 13, marginBottom: 8, display: 'block' }}>🌐 السيرفر المخصص للترحيب</label>
+            <select className="form-select" value={s.welcomeGuildId || ''} onChange={e => setS({ ...s, welcomeGuildId: e.target.value, welcomeChannelId: '' })}>
+              <option value="">— اختر سيرفر —</option>
+              {guildChannels.map(g => (
+                <option key={g.guildId} value={g.guildId}>{g.guildName}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label style={{ fontSize: 13, marginBottom: 8, display: 'block' }}>💬 روم الترحيب (Channel)</label>
+            <select className="form-select" value={s.welcomeChannelId || ''} onChange={e => setS({ ...s, welcomeChannelId: e.target.value })}>
+              <option value="">— اختر روم —</option>
+              {(guildChannels.find(g => g.guildId === s.welcomeGuildId)?.channels || []).map(ch => (
+                <option key={ch.id} value={ch.id}>#{ch.name}</option>
+              ))}
+            </select>
+            {s.welcomeChannelId && (
+              <div style={{ fontSize: 11, color: 'var(--green)', marginTop: 4 }}>✅ تم اختيار: #{(guildChannels.find(g => g.guildId === s.welcomeGuildId)?.channels || []).find(c => c.id === s.welcomeChannelId)?.name || s.welcomeChannelId}</div>
+            )}
+          </div>
+
+          <div className="form-group">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <label style={{ fontSize: 13, margin: 0 }}>رابط صورة الترحيب (Background URL)</label>
+              <label style={{ fontSize: 13, margin: 0 }}>صورة الخلفية (Background URL)</label>
               <a href="https://imgbb.com/" target="_blank" rel="noreferrer" className="btn btn-sm btn-primary" style={{ fontSize: 11, padding: '2px 8px' }}>
                 ☁️ موقع رفع الصور
               </a>

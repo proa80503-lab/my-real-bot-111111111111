@@ -11,7 +11,7 @@
 const express = require('express');
 const { requireBotOwner } = require('./auth');
 const dConf = require('../../../utils/dashboard-config');
-const botSettings = require('../../../utils/bot-settings');
+const botSettings = require('../../database/bot-settings-db');
 const db = require('../../database/db');
 const fs = require('fs');
 const path = require('path');
@@ -87,6 +87,15 @@ router.get('/stats', (req, res) => {
             platform: process.platform,
             logs,
             guilds,
+            // قائمة قنوات جميع السيرفرات لاختيار روم الترحيب
+            guildChannels: client?.guilds?.cache?.map(g => ({
+                guildId: g.id,
+                guildName: g.name,
+                channels: g.channels.cache
+                    .filter(ch => ch.type === 0) // text channels only
+                    .map(ch => ({ id: ch.id, name: ch.name }))
+                    .sort((a, b) => a.name.localeCompare(b.name))
+            })) || [],
             botSettings: botSettings.getAll(),
         },
     });
@@ -101,7 +110,9 @@ router.post('/settings', (req, res) => {
         'autoMessagesEnabled', 'ghostPingEnabled', 'randomEventInterval',
         'challengeInterval', 'moodMessageInterval', 'aiRandomReplyFrequency',
         'aiRandomReplyEnabled', 'dailyReminderEnabled', 'dailySummaryEnabled',
-        'antiRaidAccountAgeEnabled', 'welcomeImage', 'welcomeAvatarX',
+        'antiRaidAccountAgeEnabled',
+        'welcomeGuildId', 'welcomeChannelId',
+        'welcomeImage', 'welcomeAvatarX',
         'welcomeAvatarY', 'welcomeAvatarWidth', 'welcomeAvatarHeight', 'welcomeAvatarRadius',
         'savedWelcomeDesigns'
     ];
