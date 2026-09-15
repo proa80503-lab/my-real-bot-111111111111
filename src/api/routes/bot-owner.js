@@ -58,13 +58,37 @@ router.get('/stats', async (req, res) => {
         }
     } catch {}
 
-    // تأكد من تحديث الـ cache بجلب كل السيرفرات من Discord
-    if (client?.isReady() && client.guilds.cache.size === 0) {
-        try { await client.guilds.fetch(); } catch {}
+    // ── جلب السيرفرات الكاملة من Discord API ─────────────────────────────────
+    // guilds.fetch() بدون معامل يُرجع OAuth2Guild (جزئي) بدون قنوات.
+    // نجلب كل سيرفر بشكل كامل حتى نحصل على قنواته.
+    let fullGuilds = [];
+    if (client?.isReady()) {
+        try {
+            // الخطوة 1: جلب قائمة السيرفرات (OAuth2Guild partials)
+            const partialGuilds = await client.guilds.fetch();
+            // الخطوة 2: جلب كل سيرفر كاملاً (مع قنواته وأعضائه)
+            fullGuilds = await Promise.all(
+                partialGuilds.map(async pg => {
+                    try {
+                        const g = await client.guilds.fetch(pg.id);
+                        // جلب القنوات
+                        if (g.channels.cache.size === 0) {
+                            try { await g.channels.fetch(); } catch {}
+                        }
+                        return g;
+                    } catch { return null; }
+                })
+            );
+            fullGuilds = fullGuilds.filter(Boolean);
+        } catch (e) {
+            console.error('[Stats] فشل جلب السيرفرات:', e.message);
+            // احتياطي: استخدم ما في الـ cache
+            fullGuilds = [...(client.guilds.cache.values())];
+        }
     }
 
     // إحصائيات السيرفرات
-    const guilds = client?.guilds?.cache?.map(g => ({
+    const guilds = fullGuilds.map(g => ({
         id: g.id,
         name: g.name,
         icon: g.iconURL({ dynamic: true }) || null,
@@ -72,7 +96,17 @@ router.get('/stats', async (req, res) => {
         ownerId: g.ownerId,
         channels: g.channels.cache.size,
         roles: g.roles.cache.size,
-    })) || [];
+    }));
+
+    // قائمة قنوات جميع السيرفرات لاختيار روم الترحيب
+    const guildChannels = fullGuilds.map(g => ({
+        guildId: g.id,
+        guildName: g.name,
+        channels: g.channels.cache
+            .filter(ch => ch.type === ChannelType.GuildText)
+            .map(ch => ({ id: ch.id, name: ch.name }))
+            .sort((a, b) => a.name.localeCompare(b.name))
+    }));
 
     res.json({
         success: true,
@@ -80,7 +114,7 @@ router.get('/stats', async (req, res) => {
             totalCmds,
             cmdStats,
             topUsers,
-            discordGuilds: client?.guilds?.cache?.size ?? 0,
+            discordGuilds: fullGuilds.length,
             discordUsers: client?.users?.cache?.size ?? 0,
             ping: client?.ws?.ping ?? 0,
             botTag: client?.user?.tag ?? 'offline',
@@ -93,23 +127,7 @@ router.get('/stats', async (req, res) => {
             platform: process.platform,
             logs,
             guilds,
-            // قائمة قنوات جميع السيرفرات لاختيار روم الترحيب
-            // نجلب القنوات من Discord API إذا لم تكن في الـ cache
-            guildChannels: await Promise.all(
-                (client?.guilds?.cache?.map(async g => {
-                    if (g.channels.cache.size === 0) {
-                        try { await g.channels.fetch(); } catch {}
-                    }
-                    return {
-                        guildId: g.id,
-                        guildName: g.name,
-                        channels: g.channels.cache
-                            .filter(ch => ch.type === ChannelType.GuildText)
-                            .map(ch => ({ id: ch.id, name: ch.name }))
-                            .sort((a, b) => a.name.localeCompare(b.name))
-                    };
-                }) || [])
-            ),
+            guildChannels,
             botSettings: botSettings.getAll(),
         },
     });
