@@ -339,13 +339,26 @@ function WelcomeSection({ stats, toast }) {
     else toast('خطأ في الحفظ', 'error')
   }
 
+  const testWelcome = async () => {
+    setSaving(true)
+    const res = await apiFetch('/bot-owner/test-welcome', { method: 'POST' })
+    setSaving(false)
+    if (res?.success) toast('تم إرسال رسالة تجريبية بنجاح! تفقد الديسكورد 🚀', 'success')
+    else toast(res?.error || 'حدث خطأ أثناء إرسال التجربة', 'error')
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div style={{ color: 'var(--muted)', fontSize: 13 }}>تخصيص صورة الترحيب العامة لجميع السيرفرات</div>
-        <button className="btn btn-success" onClick={save} disabled={saving}>
-          {saving ? '⏳ حفظ...' : '💾 حفظ الترحيب'}
-        </button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button className="btn btn-primary" onClick={testWelcome} disabled={saving}>
+            🧪 تجربة الترحيب
+          </button>
+          <button className="btn btn-success" onClick={save} disabled={saving}>
+            {saving ? '⏳ حفظ...' : '💾 حفظ الترحيب'}
+          </button>
+        </div>
       </div>
 
       <div className="cards-grid-2">

@@ -229,4 +229,36 @@ router.delete('/response/:id', (req, res) => {
     res.json({ success: deleted });
 });
 
+// ──────────────────────────────────────────────────────────────────────────────
+// تجربة الترحيب
+// ──────────────────────────────────────────────────────────────────────────────
+router.post('/test-welcome', async (req, res) => {
+    const client = req.app.get('client');
+    if (!client) return res.status(503).json({ success: false, error: 'Bot offline' });
+
+    try {
+        const { sendWelcome } = require('../../../utils/welcome');
+        // Find any guild the bot and the owner share
+        let testMember = null;
+        for (const guild of client.guilds.cache.values()) {
+            try {
+                const member = await guild.members.fetch(req.user.id);
+                if (member) {
+                    testMember = member;
+                    break;
+                }
+            } catch (err) {}
+        }
+
+        if (!testMember) {
+            return res.status(404).json({ success: false, error: 'يجب أن تكون موجوداً في سيرفر واحد على الأقل مع البوت لتجربة الترحيب.' });
+        }
+
+        await sendWelcome(testMember);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 module.exports = router;
