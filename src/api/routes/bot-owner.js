@@ -250,31 +250,46 @@ router.post('/test-welcome', async (req, res) => {
 
     try {
         const { sendWelcome } = require('../../../utils/welcome');
-        // Find a guild the bot and the owner share THAT ALSO HAS a welcome channel
-        let testMember = null;
-        for (const guild of client.guilds.cache.values()) {
-            try {
-                const hasChannel = guild.channels.cache.some(
-                    ch => ch.name === 'الترحيب' || ch.name === 'welcome' || ch.name === '👋┃الترحيب'
-                ) || guild.systemChannel;
-                
-                if (!hasChannel) continue;
+        const settings = botSettings.getAll();
 
-                const member = await guild.members.fetch(req.user.id);
-                if (member) {
-                    testMember = member;
-                    break;
-                }
-            } catch (err) {}
+        // ── تحديد السيرفر والروم من الإعدادات المحفوظة ──────────────────────────
+        const guildId   = settings.welcomeGuildId;
+        const channelId = settings.welcomeChannelId;
+
+        if (!guildId || !channelId) {
+            return res.status(400).json({
+                success: false,
+                error: 'يرجى اختيار السيرفر وروم الترحيب أولاً من الإعدادات ثم الضغط على "حفظ وتطبيق".'
+            });
+        }
+
+        const guild = client.guilds.cache.get(guildId);
+        if (!guild) {
+            return res.status(404).json({ success: false, error: `لم يجد البوت السيرفر (${guildId}) — تأكد أن البوت مازال فيه.` });
+        }
+
+        const channel = guild.channels.cache.get(channelId);
+        if (!channel) {
+            return res.status(404).json({ success: false, error: `لم يجد البوت الروم (${channelId}) في السيرفر.` });
+        }
+
+        // ── جلب مالك البوت كعضو لاستخدام صورته في التجربة ────────────────────
+        let testMember = null;
+        try { testMember = await guild.members.fetch(req.user.id); } catch {}
+        if (!testMember) {
+            // احتياطي: أي عضو موجود في السيرفر
+            const members = await guild.members.fetch({ limit: 5 });
+            testMember = members.first();
         }
 
         if (!testMember) {
-            return res.status(404).json({ success: false, error: 'يجب أن تكون موجوداً في سيرفر واحد على الأقل مع البوت لتجربة الترحيب.' });
+            return res.status(404).json({ success: false, error: 'لا يوجد أعضاء في السيرفر لاستخدامهم في التجربة.' });
         }
 
         await sendWelcome(testMember);
-        res.json({ success: true });
+        res.json({ success: true, message: `تم إرسال التجربة إلى #${channel.name} في ${guild.name}` });
     } catch (err) {
+        console.error('[test-welcome]', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });

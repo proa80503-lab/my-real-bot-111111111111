@@ -346,10 +346,13 @@ function WelcomeSection({ stats, toast }) {
   }
 
   const testWelcome = async () => {
+    if (!s.welcomeGuildId || !s.welcomeChannelId) {
+      return toast('يرجى اختيار السيرفر والروم أولاً ثم الضغط على "حفظ وتطبيق"', 'error')
+    }
     setSaving(true)
     const res = await apiFetch('/bot-owner/test-welcome', { method: 'POST' })
     setSaving(false)
-    if (res?.success) toast('تم إرسال رسالة تجريبية بنجاح! تفقد الديسكورد 🚀', 'success')
+    if (res?.success) toast(res.message || 'تم إرسال رسالة تجريبية! تفقد ديسكورد 🚀', 'success')
     else toast(res?.error || 'حدث خطأ أثناء إرسال التجربة', 'error')
   }
 
