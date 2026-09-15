@@ -282,6 +282,44 @@ async function dailySummary(client) {
     }
 }
 
+// ─── 10. تصفير البنك الأسبوعي ──────────────────────────────────────────────
+async function weeklyBankReset(client) {
+    const now = Date.now();
+    const lastReset = botSettings.get('lastBankReset') || 0;
+    const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+    
+    // التحقق مما إذا مر أسبوع على آخر تصفير
+    if (now - lastReset > WEEK_MS) {
+        console.log('[AutoTask] 🏦 بدء تصفير البنك الأسبوعي...');
+        try {
+            db.resetAllBanks();
+            botSettings.set('lastBankReset', now);
+            console.log('[AutoTask] ✅ تم تصفير البنك لجميع المستخدمين بنجاح!');
+            
+            // إرسال إشعار عام إذا كانت الرسائل مفعلة
+            if (botSettings.get('autoMessagesEnabled') !== false) {
+                const { EmbedBuilder } = require('discord.js');
+                for (const guild of client.guilds.cache.values()) {
+                    const guildData = db.getGuildData(guild.id);
+                    const botChannel = guild.channels.cache.get(guildData.botChannel) ||
+                        guild.channels.cache.find(c => c.name.includes('أوامر-البوت'));
+            
+                    if (botChannel) {
+                        const embed = new EmbedBuilder()
+                            .setColor('#E74C3C')
+                            .setTitle('🏦 تصفير البنك الأسبوعي!')
+                            .setDescription('لقد بدأ أسبوع جديد، وتم تصفير أموال البنك لجميع الأعضاء! حظاً موفقاً في جمع ثرواتكم هذا الأسبوع!')
+                            .setTimestamp();
+                        botChannel.send({ embeds: [embed] }).catch(() => {});
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('[AutoTask] ❌ خطأ أثناء تصفير البنك الأسبوعي:', error);
+        }
+    }
+}
+
 
 function initializeAutoTasks(client) {
     console.log('🤖 بدء المهام التلقائية...');
@@ -308,6 +346,7 @@ function initializeAutoTasks(client) {
     setInterval(() => {
         remindDailyReward(client).catch(() => {});
         dailySummary(client).catch(() => {});
+        weeklyBankReset(client).catch(() => {}); // تصفير البنك
     }, 5 * 60 * 1000);
 
     // تفاعلات عشوائية
@@ -317,6 +356,7 @@ function initializeAutoTasks(client) {
     console.log('   🕐 تنظيف الغرف المنتهية: كل ساعة');
     console.log('   ☀️ التذكير اليومي: 9 صباحاً');
     console.log('   🌙 الملخص المسائي: 9 مساءً');
+    console.log('   🏦 تصفير البنك: كل أسبوع');
     console.log('   💾 النسخ الاحتياطي: يومياً');
 }
 
@@ -332,4 +372,5 @@ module.exports = {
     cleanupExpiredRooms,
     remindDailyReward,
     dailySummary,
+    weeklyBankReset,
 };

@@ -144,6 +144,12 @@ function getGuildData(guildId) {
         logChannelId: guild.log_channel_id || null,
         // ─── Protection ─────────────────────────
         protectionSettings,
+        // ─── Welcome Settings ───────────────────
+        welcomeImage: guild.welcome_image || null,
+        welcomeAvatarX: guild.welcome_avatar_x || 0,
+        welcomeAvatarY: guild.welcome_avatar_y || 0,
+        welcomeAvatarSize: guild.welcome_avatar_size || 128,
+        welcomeAvatarRadius: guild.welcome_avatar_radius || 50,
         // ─── Settings ───────────────────────────
         setupComplete: guild.setup_complete === 1,
         prefix: guild.prefix,
@@ -166,6 +172,9 @@ const _GUILD_MAP = {
     // ─── New fields ─────────────────────────
     colorChannelId: 'color_channel_id', colorMessageId: 'color_message_id',
     logChannelId: 'log_channel_id', protectionSettings: 'protection_settings',
+    welcomeImage: 'welcome_image', welcomeAvatarX: 'welcome_avatar_x',
+    welcomeAvatarY: 'welcome_avatar_y', welcomeAvatarSize: 'welcome_avatar_size',
+    welcomeAvatarRadius: 'welcome_avatar_radius',
     // ─── Settings ───────────────────────────
     setupComplete: 'setup_complete', prefix: 'prefix', language: 'language',
     economyEnabled: 'economy_enabled', gamesEnabled: 'games_enabled',
@@ -218,6 +227,7 @@ function cleanExpiredSessions() {
 }
 function getAllUsers() { const rows=stmt('SELECT user_id FROM users').all(); const result={}; for(const r of rows)result[r.user_id]=getUserData(r.user_id); return result; }
 function getLeaderboard(field='balance',limit=10) { const m={balance:'balance',bank:'bank',xp:'xp',level:'level'}; const col=m[field]||'balance'; return stmt('SELECT user_id, '+col+' as value FROM users ORDER BY '+col+' DESC LIMIT ?').all(limit); }
+function resetAllBanks() { getDb().prepare('UPDATE users SET bank = 0, updated_at = unixepoch()').run(); }
 function loadDatabase() { return { users: {}, guilds: {} }; }
 function saveDatabase() { return true; }
 function saveAll() {}
@@ -228,7 +238,7 @@ module.exports = {
     getUserData, updateUserData, updateFields,
     addMoney, removeMoney, addMoneyToBank, removeMoneyFromBank, transferMoney, addTransaction,
     getGuildData, updateGuildData,
-    getAllUsers, getLeaderboard,
+    getAllUsers, getLeaderboard, resetAllBanks,
     loadDatabase, saveDatabase, saveAll,
     // Web Sessions
     createWebSession, getWebSession, deleteWebSession, cleanExpiredSessions,

@@ -46,6 +46,16 @@ const DEFAULTS = {
     // أوامر معطّلة
     disabledCommands: [],             // أسماء الأوامر المعطّلة ['casino','rob',...]
 
+    // تصفير البنك
+    lastBankReset: 0,                 // توقيت آخر تصفير للبنك
+
+    // إعدادات الترحيب (Welcome Settings Global)
+    welcomeImage: '',
+    welcomeAvatarX: 0,
+    welcomeAvatarY: 0,
+    welcomeAvatarSize: 128,
+    welcomeAvatarRadius: 50,
+
     // إعدادات Dashboard
     dashboardKey: '',                 // يُملأ من .env أو يُولَّد مرة واحدة
 };

@@ -313,6 +313,150 @@ function ResponsesSection({ toast }) {
   )
 }
 
+// ─── Welcome Settings ─────────────────────────────────────────────────────────
+function WelcomeSection({ stats, toast }) {
+  const settings = stats?.botSettings || {}
+  const [s, setS] = useState({
+    welcomeImage: '',
+    welcomeAvatarX: 0,
+    welcomeAvatarY: 0,
+    welcomeAvatarSize: 128,
+    welcomeAvatarRadius: 50,
+    ...settings,
+  })
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (settings && Object.keys(settings).length > 0) setS(prev => ({ ...prev, ...settings }))
+  }, [stats])
+
+  const save = async () => {
+    setSaving(true)
+    const res = await apiFetch('/bot-owner/settings', { method: 'POST', body: JSON.stringify(s) })
+    setSaving(false)
+    if (res?.success) toast('تم حفظ إعدادات الترحيب ✅', 'success')
+    else toast('خطأ في الحفظ', 'error')
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <div style={{ color: 'var(--muted)', fontSize: 13 }}>تخصيص صورة الترحيب العامة لجميع السيرفرات</div>
+        <button className="btn btn-success" onClick={save} disabled={saving}>
+          {saving ? '⏳ حفظ...' : '💾 حفظ الترحيب'}
+        </button>
+      </div>
+
+      <div className="cards-grid-2">
+        <div className="card">
+          <div className="card-header"><span className="card-icon">⚙️</span><div className="card-title">الإعدادات</div></div>
+          
+          <div className="form-group">
+            <label style={{ fontSize: 13, marginBottom: 8, display: 'block' }}>رابط صورة الترحيب (Background URL)</label>
+            <input 
+              type="text" 
+              className="form-input" 
+              placeholder="https://example.com/image.png" 
+              value={s.welcomeImage || ''} 
+              onChange={e => setS({ ...s, welcomeImage: e.target.value })} 
+            />
+          </div>
+          
+          <div className="form-group">
+            <label style={{ fontSize: 13, marginBottom: 8, display: 'block' }}>موقع العضو أفقياً (X): {s.welcomeAvatarX}</label>
+            <input 
+              type="range" min="0" max="1920" 
+              value={s.welcomeAvatarX || 0} 
+              onChange={e => setS({ ...s, welcomeAvatarX: parseInt(e.target.value) })} 
+              style={{ width: '100%' }}
+            />
+          </div>
+
+          <div className="form-group">
+            <label style={{ fontSize: 13, marginBottom: 8, display: 'block' }}>موقع العضو عمودياً (Y): {s.welcomeAvatarY}</label>
+            <input 
+              type="range" min="0" max="1080" 
+              value={s.welcomeAvatarY || 0} 
+              onChange={e => setS({ ...s, welcomeAvatarY: parseInt(e.target.value) })} 
+              style={{ width: '100%' }}
+            />
+          </div>
+
+          <div className="form-group">
+            <label style={{ fontSize: 13, marginBottom: 8, display: 'block' }}>حجم صورة العضو (Size): {s.welcomeAvatarSize}</label>
+            <input 
+              type="range" min="50" max="500" 
+              value={s.welcomeAvatarSize || 128} 
+              onChange={e => setS({ ...s, welcomeAvatarSize: parseInt(e.target.value) })} 
+              style={{ width: '100%' }}
+            />
+          </div>
+
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label style={{ fontSize: 13, marginBottom: 8, display: 'block' }}>دوران زوايا الصورة (Radius %): {s.welcomeAvatarRadius}%</label>
+            <input 
+              type="range" min="0" max="50" 
+              value={s.welcomeAvatarRadius || 50} 
+              onChange={e => setS({ ...s, welcomeAvatarRadius: parseInt(e.target.value) })} 
+              style={{ width: '100%' }}
+            />
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-header"><span className="card-icon">👁️</span><div className="card-title">معاينة مباشرة (شاشة 1920x1080)</div></div>
+          
+          <div style={{
+            position: 'relative',
+            width: '100%',
+            aspectRatio: '16/9',
+            backgroundColor: '#111',
+            backgroundImage: s.welcomeImage ? \`url(\${s.welcomeImage})\` : 'none',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            borderRadius: 8,
+            overflow: 'hidden',
+            border: '2px dashed var(--border)'
+          }}>
+            {s.welcomeImage ? (
+              <div 
+                style={{
+                  position: 'absolute',
+                  left: \`\${(s.welcomeAvatarX / 1920) * 100}%\`,
+                  top: \`\${(s.welcomeAvatarY / 1080) * 100}%\`,
+                  width: \`\${(s.welcomeAvatarSize / 1920) * 100}%\`,
+                  height: \`\${(s.welcomeAvatarSize / 1920) * 100}%\`,
+                  aspectRatio: '1/1',
+                  backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                  borderRadius: \`\${s.welcomeAvatarRadius}%\`,
+                  border: '3px solid #00FF00',
+                  boxShadow: '0 0 10px rgba(0,0,0,0.5)',
+                  transform: 'translate(-50%, -50%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '1vw',
+                  fontWeight: 'bold',
+                  color: '#333'
+                }}
+              >
+                Avatar
+              </div>
+            ) : (
+              <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                يرجى وضع رابط الصورة لمعاينة التصميم
+              </div>
+            )}
+          </div>
+          <div style={{ marginTop: 12, fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>
+            * يتم حساب المواقع بناءً على دقة شاشة 1920x1080.
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Bot Owner Dashboard ─────────────────────────────────────────────────
 export default function BotOwnerDashboard() {
   const { user, logout } = useAuth()
@@ -324,7 +468,7 @@ export default function BotOwnerDashboard() {
     apiFetch('/bot-owner/stats').then(d => { if (d?.success) setStats(d.stats) })
   }, [])
 
-  const sections = { overview: <Overview stats={stats} />, control: <ControlSection stats={stats} toast={toast} />, servers: <ServersSection stats={stats} />, economy: <EconomySection toast={toast} />, announce: <AnnounceSection stats={stats} toast={toast} />, logs: <LogsSection stats={stats} />, responses: <ResponsesSection toast={toast} /> }
+  const sections = { overview: <Overview stats={stats} />, control: <ControlSection stats={stats} toast={toast} />, servers: <ServersSection stats={stats} />, economy: <EconomySection toast={toast} />, announce: <AnnounceSection stats={stats} toast={toast} />, logs: <LogsSection stats={stats} />, responses: <ResponsesSection toast={toast} />, welcome: <WelcomeSection stats={stats} toast={toast} /> }
 
   return (
     <div className="page-layout">
@@ -339,6 +483,7 @@ export default function BotOwnerDashboard() {
             {section === 'announce' && '📢 الإعلانات'}
             {section === 'logs' && '📋 السجلات'}
             {section === 'responses' && '🤖 الردود التلقائية'}
+            {section === 'welcome' && '🖼️ صورة الترحيب'}
           </h1>
           <span className="page-badge gold">👑 Bot Owner</span>
         </div>

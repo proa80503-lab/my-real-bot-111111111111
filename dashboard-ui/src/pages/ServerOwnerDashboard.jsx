@@ -281,6 +281,9 @@ function ProtectionSection({ guildId, toast }) {
   )
 }
 
+// ─── Welcome Image ────────────────────────────────────────────────────────────
+// (Moved to BotOwnerDashboard)
+
 // ─── Roles ────────────────────────────────────────────────────────────────────
 function RolesSection({ guildId }) {
   const [roles, setRoles] = useState([])

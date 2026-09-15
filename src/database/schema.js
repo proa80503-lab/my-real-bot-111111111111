@@ -90,6 +90,12 @@ function initializeSchema(db) {
         log_channel_id TEXT,
         -- إعدادات الحماية (JSON)
         protection_settings TEXT NOT NULL DEFAULT '{}',
+        -- إعدادات الترحيب
+        welcome_image TEXT,
+        welcome_avatar_x INTEGER NOT NULL DEFAULT 0,
+        welcome_avatar_y INTEGER NOT NULL DEFAULT 0,
+        welcome_avatar_size INTEGER NOT NULL DEFAULT 128,
+        welcome_avatar_radius INTEGER NOT NULL DEFAULT 50,
         -- إعدادات عامة
         setup_complete INTEGER NOT NULL DEFAULT 0,
         prefix TEXT NOT NULL DEFAULT '!',
@@ -116,6 +122,16 @@ function initializeSchema(db) {
         db.exec("ALTER TABLE guilds ADD COLUMN log_channel_id TEXT");
     if (!guildCols.includes('protection_settings'))
         db.exec("ALTER TABLE guilds ADD COLUMN protection_settings TEXT NOT NULL DEFAULT '{}'");
+    if (!guildCols.includes('welcome_image'))
+        db.exec("ALTER TABLE guilds ADD COLUMN welcome_image TEXT");
+    if (!guildCols.includes('welcome_avatar_x'))
+        db.exec("ALTER TABLE guilds ADD COLUMN welcome_avatar_x INTEGER NOT NULL DEFAULT 0");
+    if (!guildCols.includes('welcome_avatar_y'))
+        db.exec("ALTER TABLE guilds ADD COLUMN welcome_avatar_y INTEGER NOT NULL DEFAULT 0");
+    if (!guildCols.includes('welcome_avatar_size'))
+        db.exec("ALTER TABLE guilds ADD COLUMN welcome_avatar_size INTEGER NOT NULL DEFAULT 128");
+    if (!guildCols.includes('welcome_avatar_radius'))
+        db.exec("ALTER TABLE guilds ADD COLUMN welcome_avatar_radius INTEGER NOT NULL DEFAULT 50");
 
     // ─── Clans ───────────────────────────────────────────────────────────────
     db.exec(`CREATE TABLE IF NOT EXISTS clans (

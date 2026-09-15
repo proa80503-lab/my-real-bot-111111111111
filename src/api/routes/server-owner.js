@@ -298,6 +298,38 @@ router.post('/protection', (req, res) => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
+// إعدادات الترحيب (Welcome Settings)
+// ──────────────────────────────────────────────────────────────────────────────
+router.get('/welcome-settings', (req, res) => {
+    const { guildId } = req.params;
+    const guildData = db.getGuildData(guildId);
+    
+    res.json({
+        success: true,
+        welcomeImage: guildData.welcomeImage,
+        welcomeAvatarX: guildData.welcomeAvatarX,
+        welcomeAvatarY: guildData.welcomeAvatarY,
+        welcomeAvatarSize: guildData.welcomeAvatarSize,
+        welcomeAvatarRadius: guildData.welcomeAvatarRadius,
+    });
+});
+
+router.post('/welcome-settings', (req, res) => {
+    const { guildId } = req.params;
+    const { welcomeImage, welcomeAvatarX, welcomeAvatarY, welcomeAvatarSize, welcomeAvatarRadius } = req.body;
+    
+    db.updateGuildData(guildId, {
+        welcomeImage: welcomeImage || null,
+        welcomeAvatarX: welcomeAvatarX || 0,
+        welcomeAvatarY: welcomeAvatarY || 0,
+        welcomeAvatarSize: welcomeAvatarSize || 128,
+        welcomeAvatarRadius: welcomeAvatarRadius || 50,
+    });
+    
+    res.json({ success: true, message: 'تم حفظ إعدادات الترحيب بنجاح' });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
 // الأعضاء
 // ──────────────────────────────────────────────────────────────────────────────
 router.get('/members/leaderboard', async (req, res) => {

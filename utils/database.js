@@ -213,6 +213,14 @@ function _buildJsonFallback() {
             .sort((a, b) => b.value - a.value)
             .slice(0, limit);
     }
+    
+    function resetAllBanks() {
+        _ensureCache();
+        for (const userId in _cache.users) {
+            _cache.users[userId].bank = 0;
+        }
+        _dirty = true;
+    }
 
     process.on('SIGINT',  () => { saveAll(); process.exit(0); });
     process.on('SIGTERM', () => { saveAll(); process.exit(0); });
@@ -221,7 +229,7 @@ function _buildJsonFallback() {
         LIMITS, getUserData, updateUserData, updateFields,
         addMoney, removeMoney, addMoneyToBank, removeMoneyFromBank, transferMoney,
         addTransaction, getGuildData, updateGuildData, getAllUsers, getLeaderboard,
-        loadDatabase, saveDatabase, saveAll,
+        loadDatabase, saveDatabase, saveAll, resetAllBanks
     };
 }
 

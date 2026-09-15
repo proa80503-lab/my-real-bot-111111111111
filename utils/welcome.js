@@ -1,5 +1,7 @@
 const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const config = require('../config');
+const botSettings = require('./bot-settings');
+const { createCanvas, loadImage } = require('canvas');
 
 // رسالة ترحيب للأعضاء الجدد
 async function sendWelcome(member) {
@@ -11,41 +13,68 @@ async function sendWelcome(member) {
 
         if (!welcomeChannel) return;
 
-        const memberCount = member.guild.memberCount;
+        // ─── Generate Welcome Image ──────────────────────────────────────────
+        const settings = botSettings.getAll();
+        let attachment = null;
 
-        const embed = new EmbedBuilder()
-            .setColor('#00FF00')
-            .setTitle('🎉 عضو جديد انضم!')
-            .setDescription(`مرحباً ${member}! نحن سعداء بانضمامك إلى **${member.guild.name}**!`)
-            .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
-            .addFields(
-                {
-                    name: '👤 العضو',
-                    value: `<@${member.id}>`,
-                    inline: true
-                },
-                {
-                    name: '📅 تاريخ الإنشاء',
-                    value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`,
-                    inline: true
-                },
-                {
-                    name: '👥 العدد الكلي',
-                    value: `أنت العضو رقم **${memberCount}**`,
-                    inline: true
-                },
-                {
-                    name: '💡 نصائح للبداية',
-                    value: `• اكتب \`تفعيل\` لإعداد حسابك\n• اكتب \`يومي\` للحصول على مكافأة\n• اكتب \`!help\` لرؤية جميع الأوامر`
-                }
-            )
-            .setFooter({ text: `${member.guild.name}` })
-            .setTimestamp();
+        if (settings.welcomeImage) {
+            try {
+                const canvas = createCanvas(1920, 1080);
+                const ctx = canvas.getContext('2d');
 
-        await welcomeChannel.send({
-            content: `||@everyone|| 🎊 عضو جديد!`,
-            embeds: [embed]
-        });
+                // 1. Draw Background
+                const bgImage = await loadImage(settings.welcomeImage);
+                ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+
+                // 2. Avatar Settings
+                const aX = settings.welcomeAvatarX || 960;
+                const aY = settings.welcomeAvatarY || 540;
+                const aSize = settings.welcomeAvatarSize || 256;
+                const aRadiusPercent = settings.welcomeAvatarRadius || 50;
+
+                // 3. Calculate positioning (X, Y are center)
+                const startX = aX - (aSize / 2);
+                const startY = aY - (aSize / 2);
+                
+                // Border radius calculation
+                const cornerRadius = (aRadiusPercent / 100) * aSize;
+
+                // 4. Draw Avatar with rounded corners
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(startX + cornerRadius, startY);
+                ctx.lineTo(startX + aSize - cornerRadius, startY);
+                ctx.quadraticCurveTo(startX + aSize, startY, startX + aSize, startY + cornerRadius);
+                ctx.lineTo(startX + aSize, startY + aSize - cornerRadius);
+                ctx.quadraticCurveTo(startX + aSize, startY + aSize, startX + aSize - cornerRadius, startY + aSize);
+                ctx.lineTo(startX + cornerRadius, startY + aSize);
+                ctx.quadraticCurveTo(startX, startY + aSize, startX, startY + aSize - cornerRadius);
+                ctx.lineTo(startX, startY + cornerRadius);
+                ctx.quadraticCurveTo(startX, startY, startX + cornerRadius, startY);
+                ctx.closePath();
+                ctx.clip();
+
+                const avatarImg = await loadImage(member.user.displayAvatarURL({ extension: 'png', size: aSize }));
+                ctx.drawImage(avatarImg, startX, startY, aSize, aSize);
+                ctx.restore();
+
+                // Generate Buffer
+                const buffer = canvas.toBuffer('image/png');
+                attachment = new AttachmentBuilder(buffer, { name: 'welcome.png' });
+            } catch (err) {
+                console.error('[Welcome Image Error]', err.message);
+            }
+        }
+
+        const messagePayload = {
+            content: `||@everyone|| 🎊 مرحباً بك يا ${member}! نورت سيرفر **${member.guild.name}**!`,
+        };
+
+        if (attachment) {
+            messagePayload.files = [attachment];
+        }
+
+        await welcomeChannel.send(messagePayload);
 
         // رسالة خاصة للعضو
         try {

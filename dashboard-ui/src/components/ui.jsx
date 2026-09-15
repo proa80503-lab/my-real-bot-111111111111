@@ -39,6 +39,7 @@ export function Sidebar({ activeSection, onSection, role, user, onLogout, select
     { id: 'announce', icon: '📢', label: 'الإعلانات' },
     { id: 'logs', icon: '📋', label: 'السجلات' },
     { id: 'responses', icon: '🤖', label: 'الردود التلقائية' },
+    { id: 'welcome', icon: '🖼️', label: 'صورة الترحيب' },
   ]
 
   const serverOwnerMenu = [

@@ -101,7 +101,8 @@ router.post('/settings', (req, res) => {
         'autoMessagesEnabled', 'ghostPingEnabled', 'randomEventInterval',
         'challengeInterval', 'moodMessageInterval', 'aiRandomReplyFrequency',
         'aiRandomReplyEnabled', 'dailyReminderEnabled', 'dailySummaryEnabled',
-        'antiRaidAccountAgeEnabled',
+        'antiRaidAccountAgeEnabled', 'welcomeImage', 'welcomeAvatarX',
+        'welcomeAvatarY', 'welcomeAvatarSize', 'welcomeAvatarRadius'
     ];
 
     for (const key of allowed) {
