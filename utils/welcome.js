@@ -3,6 +3,7 @@
 const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const config      = require('../config');
 const botSettings = require('../src/database/bot-settings-db');
+const db          = require('../src/database/db');
 const { createCanvas, loadImage } = require('canvas');
 
 // ── جلب صورة كـ Buffer ─────────────────────────────────────────────────────────
@@ -71,7 +72,27 @@ async function buildWelcomeImage(settings, member) {
 // ── الدالة الرئيسية للترحيب ────────────────────────────────────────────────────
 async function sendWelcome(member) {
     try {
-        const settings = botSettings.getAll();
+        // جمع الإعدادات من المصدرين: botSettings + guildData
+        // guildData يأخذ الأولوية لصورة الترحيب والقناة إذا كانت موجودة فيه
+        const globalSettings = botSettings.getAll();
+        const guildData      = db.getGuildData(member.guild.id);
+
+        const settings = {
+            ...globalSettings,
+            // إذا وجدت صورة في guildData نستخدمها، وإلا نستخدم من botSettings
+            welcomeImage:       guildData.welcomeImage       || globalSettings.welcomeImage       || '',
+            welcomeAvatarX:     guildData.welcomeAvatarX     || globalSettings.welcomeAvatarX     || 960,
+            welcomeAvatarY:     guildData.welcomeAvatarY     || globalSettings.welcomeAvatarY     || 540,
+            welcomeAvatarWidth: guildData.welcomeAvatarSize  || globalSettings.welcomeAvatarWidth || 256,
+            welcomeAvatarHeight:guildData.welcomeAvatarSize  || globalSettings.welcomeAvatarHeight|| 256,
+            welcomeAvatarRadius:guildData.welcomeAvatarRadius|| globalSettings.welcomeAvatarRadius|| 50,
+            welcomeChannelId:   guildData.welcomeChannel     || globalSettings.welcomeChannelId   || '',
+        };
+
+        console.log('[Welcome] 📋 Settings:', {
+            image: settings.welcomeImage ? '✅ موجودة' : '❌ غير موجودة',
+            channel: settings.welcomeChannelId || 'غير محدد'
+        });
 
         // ── تحديد قناة الترحيب ──────────────────────────────────────────────────
         let welcomeChannel = null;
