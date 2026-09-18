@@ -274,68 +274,74 @@ router.delete('/response/:id', (req, res) => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
-// تجربة الترحيب
+// تجربة الترحيب — النسخة الجديدة المُعاد كتابتها
 // ──────────────────────────────────────────────────────────────────────────────
 router.post('/test-welcome', async (req, res) => {
     const client = req.app.get('client');
-    if (!client?.isReady()) return res.status(503).json({ success: false, error: 'البوت أوفلاين حالياً — انتظر حتى يتصل بديسكورد.' });
+    if (!client?.isReady()) {
+        return res.status(503).json({ success: false, error: 'البوت غير متصل بديسكورد بعد. انتظر لحظة ثم حاول مجدداً.' });
+    }
 
     try {
-        const { sendWelcome } = require('../../../utils/welcome');
+        const { sendWelcomeToChannel } = require('../../../utils/welcome');
         const settings = botSettings.getAll();
 
-        // ── تحديد السيرفر والروم من الإعدادات المحفوظة ──────────────────────────
-        const guildId   = String(settings.welcomeGuildId  || '').trim();
-        const channelId = String(settings.welcomeChannelId || '').trim();
+        // ── القراءة من body الطلب أولاً، ثم من قاعدة البيانات ──────────────────
+        const guildId   = String(req.body?.guildId   || settings.welcomeGuildId   || '').trim();
+        const channelId = String(req.body?.channelId || settings.welcomeChannelId || '').trim();
 
-        if (!guildId || !channelId) {
+        if (!channelId) {
             return res.status(400).json({
                 success: false,
-                error: 'يرجى اختيار السيرفر وروم الترحيب أولاً من الإعدادات ثم الضغط على "حفظ وتطبيق".'
+                error: 'لم يتم تحديد روم الترحيب. اختر الروم من القائمة واضغط "حفظ وتطبيق" أولاً.'
             });
         }
 
-        // ── جلب السيرفر (cache أولاً ثم fetch من Discord API) ────────────────
-        let guild = client.guilds.cache.get(guildId);
-        if (!guild) {
-            try { guild = await client.guilds.fetch(guildId); } catch {}
-        }
-        if (!guild) {
+        // ── جلب القناة مباشرة بالـ ID (الأكثر موثوقية — لا يحتاج guild في الـ cache) ──
+        let channel;
+        try {
+            channel = await client.channels.fetch(channelId);
+        } catch (e) {
             return res.status(404).json({
                 success: false,
-                error: `لم يجد البوت السيرفر (ID: ${guildId}). تأكد أن البوت مازال فيه وأن الـ ID صحيح.`
+                error: `البوت لا يستطيع الوصول للقناة (ID: ${channelId}). تأكد أن البوت عنده صلاحية "View Channel" و "Send Messages" في هذه القناة.`
             });
         }
 
-        // ── جلب قنوات السيرفر إذا لم تكن في الـ cache ───────────────────────
-        if (guild.channels.cache.size === 0) {
-            try { await guild.channels.fetch(); } catch {}
-        }
-        const channel = guild.channels.cache.get(channelId);
-        if (!channel) {
-            return res.status(404).json({
-                success: false,
-                error: `لم يجد البوت الروم (ID: ${channelId}) في السيرفر. تأكد من اختيار الروم الصحيح وحفظه.`
-            });
+        if (!channel?.isTextBased()) {
+            return res.status(400).json({ success: false, error: 'القناة المختارة ليست قناة نصية.' });
         }
 
-        // ── جلب مالك البوت كعضو لاستخدام صورته في التجربة ────────────────────
+        // ── جلب السيرفر من القناة مباشرة (لا حاجة لـ guilds.fetch) ───────────────
+        const guild = channel.guild;
+        if (!guild) {
+            return res.status(404).json({ success: false, error: 'القناة ليست في سيرفر ديسكورد.' });
+        }
+
+        // ── جلب عضو للتجربة ──────────────────────────────────────────────────────
         let testMember = null;
+        // 1. حاول جلب صاحب الداشبورد
         try { testMember = await guild.members.fetch(req.user.id); } catch {}
+        // 2. احتياطي: البوت نفسه
         if (!testMember) {
-            // احتياطي: البوت نفسه
             try { testMember = await guild.members.fetch(client.user.id); } catch {}
         }
         if (!testMember) {
-            return res.status(404).json({ success: false, error: 'فشل جلب أعضاء السيرفر. تأكد من تفعيل Server Members Intent.' });
+            return res.status(404).json({
+                success: false,
+                error: 'تعذّر جلب عضو للتجربة. تأكد من تفعيل "Server Members Intent" في Discord Developer Portal.'
+            });
         }
 
-        await sendWelcome(testMember);
-        res.json({ success: true, message: `✅ تم إرسال التجربة إلى #${channel.name} في ${guild.name}` });
+        // ── إرسال رسالة الترحيب التجريبية ───────────────────────────────────────
+        await sendWelcomeToChannel(channel, testMember, settings);
+        res.json({ success: true, message: `✅ تم إرسال رسالة ترحيب تجريبية إلى #${channel.name} في ${guild.name}` });
+
     } catch (err) {
         console.error('[test-welcome]', err);
-        res.status(500).json({ success: false, error: err.message });
+        res.status(500).json({ success: false, error: `خطأ داخلي: ${err.message}` });
     }
 });
 
 module.exports = router;
+

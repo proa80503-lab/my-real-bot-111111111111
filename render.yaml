@@ -15,6 +15,7 @@ services:
       - key: NODE_ENV
         value: production
       # هذه المتغيرات يجب إضافتها يدوياً في Render Dashboard:
+      # MONGODB_URI      — رابط قاعدة بيانات MongoDB (مهم جداً!)
       # DISCORD_TOKEN    — توكن البوت
       # OWNER_ID         — معرف المالك
       # GEMINI_API_KEY   — مفتاح Gemini

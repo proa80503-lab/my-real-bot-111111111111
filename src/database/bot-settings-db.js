@@ -1,9 +1,5 @@
 'use strict';
-/**
- * bot-settings-db.js
- * يخزّن إعدادات صاحب البوت في SQLite (جدول bot_settings)
- * بدلاً من ملف JSON حتى تبقى الإعدادات بعد كل Render restart
- */
+const { BotSetting } = require('./models');
 
 const DEFAULTS = {
     autoMessagesEnabled:     'true',
@@ -24,9 +20,9 @@ const DEFAULTS = {
     dashboardKey:            '',
 
     // إعدادات الترحيب
-    welcomeGuildId:          '',   // ID السيرفر
-    welcomeChannelId:        '',   // ID الروم
-    welcomeImage:            '',   // رابط الصورة الخلفية
+    welcomeGuildId:          '',
+    welcomeChannelId:        '',
+    welcomeImage:            '',
     welcomeAvatarX:          '960',
     welcomeAvatarY:          '540',
     welcomeAvatarWidth:      '256',
@@ -34,41 +30,43 @@ const DEFAULTS = {
     welcomeAvatarRadius:     '50',
 };
 
-let _db = null;
+const cache = new Map();
 
-function getDb() {
-    if (_db) return _db;
-    const { getDb: _getDb } = require('./db-instance');
-    _db = _getDb();
-    return _db;
+async function loadBotSettings() {
+    console.log('[BotSettingsDB] ⏳ Loading bot settings from MongoDB...');
+    const settings = await BotSetting.find({}).lean();
+    for (const s of settings) {
+        cache.set(s.key, s.value);
+    }
+    console.log(`[BotSettingsDB] ✅ Loaded ${settings.length} settings into memory.`);
 }
 
 function _get(key) {
-    try {
-        const row = getDb().prepare('SELECT value FROM bot_settings WHERE key = ?').get(key);
-        return row ? row.value : (DEFAULTS[key] ?? null);
-    } catch { return DEFAULTS[key] ?? null; }
+    if (cache.has(key)) return cache.get(key);
+    return DEFAULTS[key] ?? null;
 }
 
 function _set(key, value) {
-    try {
-        getDb().prepare('INSERT OR REPLACE INTO bot_settings (key, value) VALUES (?, ?)').run(key, String(value));
-    } catch(e) { console.error('[BotSettingsDB] set error:', e.message); }
+    const valStr = String(value);
+    cache.set(key, valStr);
+    BotSetting.updateOne({ key }, { $set: { value: valStr } }, { upsert: true })
+        .catch(e => console.error('[BotSettingsDB] Update Error:', e.message));
 }
 
 function get(key) {
     const raw = _get(key);
     if (raw === null || raw === undefined) return DEFAULTS[key] ?? null;
-    // Booleans
+    
     if (raw === 'true') return true;
     if (raw === 'false') return false;
-    // JSON arrays/objects
+    
     if (raw.startsWith('[') || raw.startsWith('{')) {
         try { return JSON.parse(raw); } catch {}
     }
-    // Numbers
+    
     const n = Number(raw);
     if (!isNaN(n) && raw.trim() !== '') return n;
+    
     return raw;
 }
 
@@ -83,11 +81,10 @@ function setMany(updates) {
 
 function getAll() {
     const result = { ...DEFAULTS };
-    try {
-        const rows = getDb().prepare('SELECT key, value FROM bot_settings').all();
-        for (const row of rows) result[row.key] = row.value;
-    } catch {}
-    // Parse each value
+    for (const [k, v] of cache.entries()) {
+        result[k] = v;
+    }
+    
     const parsed = {};
     for (const [k, v] of Object.entries(result)) {
         if (v === 'true') { parsed[k] = true; continue; }
@@ -102,4 +99,4 @@ function getAll() {
     return parsed;
 }
 
-module.exports = { get, set, setMany, getAll, DEFAULTS };
+module.exports = { get, set, setMany, getAll, loadBotSettings, DEFAULTS };
