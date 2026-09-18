@@ -1,5 +1,7 @@
 'use strict';
 
+require('dotenv').config();
+
 /**
  * ╔══════════════════════════════════════════════════════════════════╗
  * ║         🎛️  لوحة تحكم البوت الاحترافية — Dashboard Server       ║
@@ -9,24 +11,17 @@
 
 const http = require('http');
 const app = require('./src/api/server');
-const botSettings = require('./utils/bot-settings');
-const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('./src/api/routes/auth');
 
 const PORT = process.env.PORT || 3000;
-const DASHBOARD_KEY = botSettings.get('dashboardKey');
 const RENDER_URL = process.env.RENDER_EXTERNAL_URL || null;
 const BASE_URL = RENDER_URL || `http://localhost:${PORT}`;
 
 function getDashboardUrl() {
-    return `${BASE_URL}/?key=${DASHBOARD_KEY}`; // Token can be passed in URL for auto-login
+    return BASE_URL;
 }
 module.exports.getDashboardUrl = getDashboardUrl;
-module.exports.DASHBOARD_KEY = DASHBOARD_KEY;
-
-// Keep token management for Store/Auction compatibility
-const webTokens = new Map();
 
 function generateWebToken(user) {
     let avatar;
@@ -60,6 +55,5 @@ module.exports.start = () => {
         console.log(`[Dashboard] 🌐 Server running on port ${PORT}`);
         console.log(`[Dashboard] 🔗 Internal URL: http://localhost:${PORT}`);
         if (RENDER_URL) console.log(`[Dashboard] ☁️ Public URL: ${RENDER_URL}`);
-        console.log(`[Dashboard] 🔑 Secret Key: ${DASHBOARD_KEY}`);
     });
 };

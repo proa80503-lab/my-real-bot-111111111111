@@ -19,11 +19,11 @@ const path = require('path');
 
 const app = express();
 
-app.use(cors({
-    origin: (origin, cb) => cb(null, true),
-    credentials: true,
-}));
-app.use(express.json());
+const corsOptions = process.env.DASHBOARD_ORIGIN
+    ? { origin: process.env.DASHBOARD_ORIGIN, credentials: true }
+    : { origin: false };
+app.use(cors(corsOptions));
+app.use(express.json({ limit: '100kb' }));
 
 // ─── Load Routers ──────────────────────────────────────────────────────────────
 const authRouter       = require('./routes/auth');

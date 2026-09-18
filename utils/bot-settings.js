@@ -61,28 +61,6 @@ function reload() {
     return getAll();
 }
 
-// ── تهيئة dashboardKey ────────────────────────────────────────────────────────
-// يُقرأ من .env أولاً، إن لم يوجد يُولَّد مرة واحدة ويُحفظ
-(function initDashboardKey() {
-    // نؤجلها قليلاً حتى يتم تحميل البيانات من MongoDB في index.js
-    setTimeout(() => {
-        const envKey = process.env.DASHBOARD_KEY;
-        const currentKey = get('dashboardKey');
-
-        if (envKey && envKey.length >= 8) {
-            if (currentKey !== envKey) {
-                set('dashboardKey', envKey);
-            }
-        } else if (!currentKey) {
-            const crypto = require('crypto');
-            const newKey = crypto.randomBytes(20).toString('hex');
-            set('dashboardKey', newKey);
-            console.log('[BotSettings] 🔑 تم توليد DASHBOARD_KEY جديد وحفظه في قاعدة البيانات');
-            console.log('[BotSettings] 💡 لتثبيته، أضف DASHBOARD_KEY=' + newKey + ' لملف .env');
-        }
-    }, 5000); // تأخير 5 ثواني
-})();
-
 module.exports = {
     get,
     set,

@@ -24,6 +24,15 @@ const userSchema = new mongoose.Schema({
     reputation: { type: Number, default: 0 },
     lastRep: { type: Number, default: null },
     vault: { type: Number, default: 0 },
+    vaultCap: { type: Number, default: 0 },
+    bankExtensions: { type: Number, default: 0 },
+    robShieldUntil: { type: Number, default: null },
+    robImmunity: { type: Boolean, default: false },
+    vipBadge: { type: Boolean, default: false },
+    xpBoostUntil: { type: Number, default: null },
+    dailyBoostUntil: { type: Number, default: null },
+    profileColor: { type: String, default: null },
+    investments: { type: mongoose.Schema.Types.Mixed, default: {} },
     
     // Stats (كانت في جدول منفصل)
     stats: {
@@ -51,7 +60,7 @@ const userSchema = new mongoose.Schema({
         description: { type: String },
         timestamp: { type: Number, default: () => Date.now() }
     }]
-}, { timestamps: true });
+}, { timestamps: true, strict: false });
 
 // ─── Guilds Schema ───────────────────────────────────────────────────────
 const guildSchema = new mongoose.Schema({

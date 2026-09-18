@@ -10,13 +10,19 @@
 
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
-const botSettings = require('../../../utils/bot-settings');
-const db = require('../../database/db');
 const router = express.Router();
 
-const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET || JWT_SECRET.length < 32) {
+    throw new Error('[Auth] JWT_SECRET must be configured and at least 32 characters long');
+}
+if (!process.env.DASHBOARD_KEY || process.env.DASHBOARD_KEY.length < 16) {
+    throw new Error('[Auth] DASHBOARD_KEY must be configured and at least 16 characters long');
+}
 const BOT_OWNER_ID = process.env.OWNER_ID;
+const loginAttempts = new Map();
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const MAX_LOGIN_ATTEMPTS = 5;
 
 // Discord OAuth2
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || '';
@@ -30,6 +36,39 @@ if (RENDER_URL && RENDER_URL.endsWith('/')) {
 const DISCORD_REDIRECT_URI = process.env.DISCORD_REDIRECT_URI || (RENDER_URL ? `${RENDER_URL}/auth/discord/callback` : 'http://localhost:3000/auth/discord/callback');
 
 const DISCORD_API = 'https://discord.com/api/v10';
+
+function getDashboardKey() {
+    return process.env.DASHBOARD_KEY;
+}
+
+function allowLogin(req) {
+    const now = Date.now();
+    const address = req.ip || req.socket.remoteAddress || 'unknown';
+    const current = loginAttempts.get(address);
+    if (!current || now - current.startedAt > LOGIN_WINDOW_MS) {
+        loginAttempts.set(address, { startedAt: now, count: 1 });
+        return true;
+    }
+    if (current.count >= MAX_LOGIN_ATTEMPTS) return false;
+    current.count += 1;
+    return true;
+}
+
+function loginWithKey(req, res, includeAdmin = false) {
+    if (!allowLogin(req)) {
+        return res.status(429).json({ success: false, error: 'Too many login attempts. Try again later.' });
+    }
+
+    const key = typeof req.body?.key === 'string' ? req.body.key : '';
+    const dashboardKey = getDashboardKey();
+    if (!dashboardKey || !key || key !== dashboardKey) {
+        return res.status(401).json({ success: false, error: 'Invalid key' });
+    }
+
+    const payload = { role: 'bot_owner', userId: BOT_OWNER_ID };
+    if (includeAdmin) payload.admin = true;
+    return res.json({ success: true, token: signToken(payload), role: 'bot_owner' });
+}
 
 // ─── Sign JWT ─────────────────────────────────────────────────────────────────
 function signToken(payload) {
@@ -98,28 +137,12 @@ const requireServerOwner = (req, res, next) => {
 // 1. Bot Owner Login (مفتاح سري)
 // ──────────────────────────────────────────────────────────────────────────────
 router.post('/bot-owner/login', (req, res) => {
-    const { key } = req.body;
-    const DASHBOARD_KEY = botSettings.get('dashboardKey');
-
-    if (!key || key !== DASHBOARD_KEY) {
-        return res.status(401).json({ success: false, error: 'Invalid key' });
-    }
-
-    const token = signToken({ role: 'bot_owner', userId: BOT_OWNER_ID });
-    res.json({ success: true, token, role: 'bot_owner' });
+    return loginWithKey(req, res);
 });
 
 // Legacy login — للتوافق مع الداشبورد القديم
 router.post('/login', (req, res) => {
-    const { key } = req.body;
-    const DASHBOARD_KEY = botSettings.get('dashboardKey');
-
-    if (!key || key !== DASHBOARD_KEY) {
-        return res.status(401).json({ success: false, error: 'Invalid key' });
-    }
-
-    const token = signToken({ role: 'bot_owner', userId: BOT_OWNER_ID, admin: true });
-    res.json({ success: true, token, role: 'bot_owner' });
+    return loginWithKey(req, res, true);
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -193,7 +216,7 @@ router.get('/discord/callback', async (req, res) => {
         const jwtToken = signToken(jwtPayload);
 
         // Redirect to frontend with token
-        res.redirect(`/?token=${jwtToken}&role=${role}`);
+        res.redirect(`/#token=${encodeURIComponent(jwtToken)}&role=${encodeURIComponent(role)}`);
     } catch (err) {
         console.error('[Auth] Discord OAuth error:', err.message);
         res.redirect(`/?error=${encodeURIComponent(err.message)}`);

@@ -7,6 +7,25 @@ npm install
 node index.js
 ```
 
+يستخدم البوت MongoDB فقط. أنشئ ملف `.env` وضع القيم التالية قبل التشغيل:
+
+```env
+DISCORD_TOKEN=...
+OWNER_ID=...
+MONGODB_URI=mongodb+srv://...
+JWT_SECRET=ضع_قيمة_عشوائية_بطول_32_حرفا_على_الأقل
+DASHBOARD_KEY=ضع_مفتاحا_عشوائيا_بطول_16_حرفا_على_الأقل
+DASHBOARD_ORIGIN=https://example.com
+```
+
+إذا كانت لديك بيانات قديمة في `data/economy.json` شغّل الترحيل مرة واحدة:
+
+```bash
+node scripts/migrate-db.js
+```
+
+ملفات SQLite القديمة مثل `data/bot.db` ليست جزءاً من التشغيل الحالي ولا تتم قراءتها.
+
 ## 📊 الإحصائيات
 
 - ✅ **115+ أمر** (عربي + إنجليزي)
@@ -66,12 +85,7 @@ utils/
 
 ## ⚙️ الإعدادات
 
-عدّل `config.js`:
-```javascript
-token: 'YOUR_BOT_TOKEN',
-prefix: '!',
-ownerId: 'YOUR_ID'
-```
+الإعدادات الحساسة لا توضع داخل `config.js`، بل داخل متغيرات البيئة فقط.
 
 ## ✨ الميزات البارزة
 

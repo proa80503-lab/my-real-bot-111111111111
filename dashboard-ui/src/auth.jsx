@@ -64,8 +64,8 @@ export function AuthProvider({ children }) {
   }, [])
 
   useEffect(() => {
-    // Handle OAuth callback token in URL
-    const params = new URLSearchParams(window.location.search)
+    // Read OAuth credentials from the fragment so they are not sent in HTTP requests.
+    const params = new URLSearchParams(window.location.hash.slice(1))
     const urlToken = params.get('token')
     const urlRole = params.get('role')
     const urlError = params.get('error')

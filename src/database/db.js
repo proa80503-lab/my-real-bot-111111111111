@@ -9,6 +9,7 @@ const cache = {
     guilds: new Map(),
     sessions: new Map()
 };
+const userWriteQueues = new Map();
 
 const LIMITS = { MAX_WALLET: 5000000, MAX_BANK: 10000000, MAX_INVESTMENT: 1000000 };
 
@@ -49,6 +50,43 @@ function _defaultUser(userId) {
     };
 }
 
+function _normalizeInventory(value) {
+    if (Array.isArray(value)) {
+        return value.map((item) => ({
+            itemId: item?.itemId || item?.id,
+            quantity: Number(item?.quantity) > 0 ? Number(item.quantity) : 1,
+            expiresAt: item?.expiresAt || null,
+        })).filter((item) => item.itemId);
+    }
+
+    if (value && typeof value === 'object') {
+        return Object.entries(value).map(([itemId, item]) => ({
+            itemId,
+            quantity: Number(item?.quantity) > 0 ? Number(item.quantity) : 1,
+            expiresAt: item?.expiresAt || null,
+        }));
+    }
+
+    return [];
+}
+
+function _persistUser(userId) {
+    const previous = userWriteQueues.get(userId) || Promise.resolve();
+    const next = previous
+        .catch(() => {})
+        .then(() => User.updateOne(
+            { userId },
+            { $set: cache.users.get(userId) },
+            { upsert: true }
+        ));
+
+    userWriteQueues.set(userId, next);
+    next.catch(err => console.error('[MongoDB Error] Update User:', err.message))
+        .finally(() => {
+            if (userWriteQueues.get(userId) === next) userWriteQueues.delete(userId);
+        });
+}
+
 // ─── Users ────────────────────────────────────────────────────────────────
 function getUserData(userId) {
     if (!cache.users.has(userId)) {
@@ -66,9 +104,7 @@ function updateUserData(userId, data) {
         if (key === 'stats') {
             user.stats = { ...user.stats, ...val };
         } else if (key === 'inventory') {
-            user.inventory = Object.entries(val).map(([itemId, item]) => ({
-                itemId, quantity: item.quantity || 1, expiresAt: item.expiresAt || null
-            }));
+            user.inventory = _normalizeInventory(val);
         } else if (key === 'achievements') {
             user.achievements = val;
         } else if (key === 'transactions') {
@@ -81,8 +117,8 @@ function updateUserData(userId, data) {
     // تحديث الكاش
     cache.users.set(userId, user);
     
-    // تحديث قاعدة البيانات في الخلفية
-    User.updateOne({ userId }, { $set: user }, { upsert: true }).catch(err => console.error('[MongoDB Error] Update User:', err.message));
+    // Serialize writes per user so concurrent commands cannot finish out of order.
+    _persistUser(userId);
     
     return user;
 }
@@ -90,6 +126,7 @@ function updateUserData(userId, data) {
 function updateFields(userId, fields) { return updateUserData(userId, fields); }
 
 function addMoney(userId, amount) {
+    if (!Number.isFinite(amount) || amount <= 0) return 0;
     const user = getUserData(userId);
     const curr = user.balance || 0;
     const add = Math.max(0, Math.min(Math.abs(amount), LIMITS.MAX_WALLET - curr));
@@ -98,6 +135,7 @@ function addMoney(userId, amount) {
 }
 
 function removeMoney(userId, amount) {
+    if (!Number.isFinite(amount) || amount <= 0) return false;
     const user = getUserData(userId);
     if ((user.balance || 0) < amount) return false;
     updateUserData(userId, { balance: user.balance - amount });
@@ -105,6 +143,7 @@ function removeMoney(userId, amount) {
 }
 
 function addMoneyToBank(userId, amount) {
+    if (!Number.isFinite(amount) || amount <= 0) return 0;
     const user = getUserData(userId);
     const maxBank = Math.max(LIMITS.MAX_BANK, user.bankCap || 0);
     const curr = user.bank || 0;
@@ -115,6 +154,7 @@ function addMoneyToBank(userId, amount) {
 }
 
 function removeMoneyFromBank(userId, amount) {
+    if (!Number.isFinite(amount) || amount <= 0) return false;
     const user = getUserData(userId);
     if ((user.bank || 0) < amount) return false;
     updateUserData(userId, { bank: user.bank - amount });
@@ -122,6 +162,7 @@ function removeMoneyFromBank(userId, amount) {
 }
 
 function transferMoney(fromId, toId, amount) {
+    if (!Number.isFinite(amount) || amount <= 0 || fromId === toId) return false;
     if (!removeMoney(fromId, amount)) return false;
     const added = addMoney(toId, amount);
     if (added < amount) {
@@ -203,6 +244,12 @@ function getAllUsers() {
     return result;
 }
 
+function getAllGuilds() {
+    const result = {};
+    for (const [id, guild] of cache.guilds.entries()) result[id] = guild;
+    return result;
+}
+
 function getLeaderboard(field = 'balance', limit = 10) {
     const arr = Array.from(cache.users.values());
     arr.sort((a, b) => (b[field] || 0) - (a[field] || 0));
@@ -225,6 +272,6 @@ module.exports = {
     getUserData, updateUserData, updateFields,
     addMoney, removeMoney, addMoneyToBank, removeMoneyFromBank, transferMoney, addTransaction,
     getGuildData, updateGuildData,
-    getAllUsers, getLeaderboard, resetAllBanks, saveAll, saveDatabase,
+    getAllUsers, getAllGuilds, getLeaderboard, resetAllBanks, saveAll, saveDatabase,
     createWebSession, getWebSession, deleteWebSession, cleanExpiredSessions
 };

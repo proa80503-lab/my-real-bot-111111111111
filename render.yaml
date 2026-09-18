@@ -18,6 +18,9 @@ services:
       # MONGODB_URI      — رابط قاعدة بيانات MongoDB (مهم جداً!)
       # DISCORD_TOKEN    — توكن البوت
       # OWNER_ID         — معرف المالك
+      # JWT_SECRET       — مفتاح JWT ثابت، 32 حرفاً على الأقل
+      # DASHBOARD_KEY    — مفتاح دخول لوحة التحكم، 16 حرفاً على الأقل
+      # DASHBOARD_ORIGIN — رابط لوحة التحكم المسموح به في CORS
       # GEMINI_API_KEY   — مفتاح Gemini
       # YOUTUBE_API_KEY  — مفتاح YouTube
       # HF_TOKEN         — مفتاح HuggingFace
