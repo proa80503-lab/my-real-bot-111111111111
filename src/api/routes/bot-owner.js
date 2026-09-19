@@ -1,5 +1,5 @@
 'use strict';
-const { ChannelType } = require('discord.js');
+const { ChannelType, PermissionsBitField } = require('discord.js');
 
 /**
  * ════════════════════════════════════════════════════════
@@ -26,7 +26,6 @@ router.use(requireBotOwner);
 // ──────────────────────────────────────────────────────────────────────────────
 router.get('/stats', async (req, res) => {
     const client = req.app.get('client');
-    const data = db.loadDatabase ? db.loadDatabase() : { users: {}, guilds: {} };
 
     // قراءة الأوامر
     const commandsBase = path.join(__dirname, '../../../commands');
@@ -41,9 +40,9 @@ router.get('/stats', async (req, res) => {
     const totalCmds = Object.values(cmdStats).reduce((s, v) => s + v.length, 0);
 
     // Leaderboard
-    const topUsers = db.getLeaderboard('balance', 10).map(u => ({
+    const topUsers = db.getLeaderboard ? db.getLeaderboard('balance', 10).map(u => ({
         id: u.user_id, balance: u.value,
-    }));
+    })) : [];
 
     const mem = process.memoryUsage();
     const upMs = client?.uptime || 0;
@@ -58,20 +57,15 @@ router.get('/stats', async (req, res) => {
         }
     } catch {}
 
-    // ── جلب السيرفرات الكاملة من Discord API ─────────────────────────────────
-    // guilds.fetch() بدون معامل يُرجع OAuth2Guild (جزئي) بدون قنوات.
-    // نجلب كل سيرفر بشكل كامل حتى نحصل على قنواته.
+    // جلب السيرفرات
     let fullGuilds = [];
     if (client?.isReady()) {
         try {
-            // الخطوة 1: جلب قائمة السيرفرات (OAuth2Guild partials)
             const partialGuilds = await client.guilds.fetch();
-            // الخطوة 2: جلب كل سيرفر كاملاً (مع قنواته وأعضائه)
             fullGuilds = await Promise.all(
                 partialGuilds.map(async pg => {
                     try {
                         const g = await client.guilds.fetch(pg.id);
-                        // جلب القنوات
                         if (g.channels.cache.size === 0) {
                             try { await g.channels.fetch(); } catch {}
                         }
@@ -82,12 +76,10 @@ router.get('/stats', async (req, res) => {
             fullGuilds = fullGuilds.filter(Boolean);
         } catch (e) {
             console.error('[Stats] فشل جلب السيرفرات:', e.message);
-            // احتياطي: استخدم ما في الـ cache
             fullGuilds = [...(client.guilds.cache.values())];
         }
     }
 
-    // إحصائيات السيرفرات
     const guilds = fullGuilds.map(g => ({
         id: g.id,
         name: g.name,
@@ -98,13 +90,16 @@ router.get('/stats', async (req, res) => {
         roles: g.roles.cache.size,
     }));
 
-    // قائمة قنوات جميع السيرفرات لاختيار روم الترحيب
     const guildChannels = fullGuilds.map(g => ({
         guildId: g.id,
         guildName: g.name,
         channels: g.channels.cache
             .filter(ch => ch.type === ChannelType.GuildText)
-            .map(ch => ({ id: ch.id, name: ch.name }))
+            .map(ch => {
+                const botMember = g.members.me;
+                const canSend = botMember ? ch.permissionsFor(botMember)?.has(PermissionsBitField.Flags.SendMessages) : false;
+                return { id: ch.id, name: ch.name, canSend };
+            })
             .sort((a, b) => a.name.localeCompare(b.name))
     }));
 
@@ -162,41 +157,32 @@ router.post('/settings', (req, res) => {
     }
 
     // ── CORE FIX: مزامنة إعدادات الترحيب مع Guild DB ─────────────────────────
-    // welcome.js يقرأ من Guild DB فقط — لذا يجب الكتابة هنا
     const targetGuildId = body.welcomeGuildId || botSettings.get('welcomeGuildId');
     if (targetGuildId && (body.welcomeChannelId !== undefined || body.welcomeEnabled !== undefined || body.welcomeGuildId !== undefined)) {
         const guildUpdates = {};
 
-        // إذا تغيّر الـ Guild، احذف الإعداد من الـ Guild القديم أولاً
         const oldGuildId = botSettings.get('welcomeGuildId');
         if (body.welcomeGuildId && oldGuildId && oldGuildId !== body.welcomeGuildId) {
             db.updateGuildData(oldGuildId, { welcomeEnabled: false, welcomeChannel: null });
-            console.log(`[BotOwner/Settings] ⚠️ تم مسح إعدادات الترحيب من Guild القديم: ${oldGuildId}`);
         }
 
-        // احفظ الإعدادات الجديدة في الـ Guild المستهدف
         if (body.welcomeChannelId !== undefined) guildUpdates.welcomeChannel = body.welcomeChannelId || null;
         if (body.welcomeEnabled   !== undefined) guildUpdates.welcomeEnabled = Boolean(body.welcomeEnabled);
-        if (body.welcomeImage     !== undefined) guildUpdates.welcomeImage   = body.welcomeImage   || null;
+        if (body.welcomeImage     !== undefined) guildUpdates.welcomeImage   = body.welcomeImage || null;
         if (body.welcomeAvatarX   !== undefined) guildUpdates.welcomeAvatarX = Number(body.welcomeAvatarX) || 960;
         if (body.welcomeAvatarY   !== undefined) guildUpdates.welcomeAvatarY = Number(body.welcomeAvatarY) || 540;
-        if (body.welcomeAvatarWidth  !== undefined) guildUpdates.welcomeAvatarSize   = Number(body.welcomeAvatarWidth)  || 256;
-        if (body.welcomeAvatarHeight !== undefined) guildUpdates.welcomeAvatarSize   = Number(body.welcomeAvatarHeight) || 256;
+        if (body.welcomeAvatarWidth  !== undefined) guildUpdates.welcomeAvatarSize = Number(body.welcomeAvatarWidth) || 256;
+        if (body.welcomeAvatarHeight !== undefined) guildUpdates.welcomeAvatarSize = Number(body.welcomeAvatarHeight) || 256;
         if (body.welcomeAvatarRadius !== undefined) guildUpdates.welcomeAvatarRadius = Number(body.welcomeAvatarRadius) || 50;
 
         if (Object.keys(guildUpdates).length > 0) {
             db.updateGuildData(targetGuildId, guildUpdates);
-            console.log(
-                `[BotOwner/Settings] ✅ تم مزامنة إعدادات الترحيب مع Guild DB\n` +
-                `  → Guild: ${targetGuildId}\n` +
-                `  → Updates: ${JSON.stringify(guildUpdates)}`
-            );
+            console.log(`[BotOwner/Settings] ✅ مزامنة ترحيب Guild ${targetGuildId}:`, guildUpdates);
         }
     }
 
     res.json({ success: true });
 });
-
 
 // ──────────────────────────────────────────────────────────────────────────────
 // إدارة الاقتصاد
@@ -211,7 +197,6 @@ router.post('/economy', (req, res) => {
         return res.status(400).json({ success: false, error: 'Invalid amount' });
     }
 
-    const uData = db.getUserData(userId);
     if (action === 'add') db.addMoney(userId, amt);
     else if (action === 'remove') db.removeMoney(userId, amt);
     else if (action === 'set') db.updateUserData(userId, { balance: amt });
@@ -230,36 +215,6 @@ router.post('/command', (req, res) => {
     else if (action === 'enable') botSettings.enableCommand(command);
     else return res.status(400).json({ success: false, error: 'Invalid action' });
     res.json({ success: true });
-});
-
-// ──────────────────────────────────────────────────────────────────────────────
-// إشراف (Moderation) من قِبل البوت أونر
-// ──────────────────────────────────────────────────────────────────────────────
-router.post('/moderation', async (req, res) => {
-    const { guildId, userId, reason, action } = req.body;
-    if (!guildId || !userId || !action) return res.status(400).json({ success: false, error: 'Missing data' });
-    const client = req.app.get('client');
-    if (!client) return res.status(503).json({ success: false, error: 'Bot offline' });
-
-    try {
-        const guild = await client.guilds.fetch(guildId);
-        if (!guild) return res.status(404).json({ success: false, error: 'Guild not found' });
-
-        if (action === 'warn') {
-            const uData = db.getUserData(userId);
-            db.updateUserData(userId, { warnings: (uData.warnings || 0) + 1 });
-        } else if (action === 'kick') {
-            const member = await guild.members.fetch(userId);
-            if (member) await member.kick(reason || 'By Bot Owner');
-        } else if (action === 'ban') {
-            await guild.members.ban(userId, { reason: reason || 'By Bot Owner' });
-        } else if (action === 'unban') {
-            await guild.members.unban(userId, reason || 'By Bot Owner');
-        }
-        res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -308,37 +263,42 @@ router.delete('/response/:id', (req, res) => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
-// تجربة الترحيب — النسخة الجديدة المُعاد كتابتها
+// تجربة الترحيب — مُصلحة بالكامل
 // ──────────────────────────────────────────────────────────────────────────────
 router.post('/test-welcome', async (req, res) => {
     const client = req.app.get('client');
     if (!client?.isReady()) {
-        return res.status(503).json({ success: false, error: 'البوت غير متصل بديسكورد بعد. انتظر لحظة ثم حاول مجدداً.' });
+        return res.status(503).json({
+            success: false,
+            error: 'البوت غير متصل بديسكورد بعد. انتظر لحظة ثم حاول مجدداً.'
+        });
     }
 
     try {
         const { sendWelcomeToChannel } = require('../../../utils/welcome');
         const settings = botSettings.getAll();
 
-        // ── القراءة من body الطلب أولاً، ثم من قاعدة البيانات ──────────────────
+        // القراءة من body الطلب أولاً، ثم من قاعدة البيانات
         const guildId   = String(req.body?.guildId   || settings.welcomeGuildId   || '').trim();
         const channelId = String(req.body?.channelId || settings.welcomeChannelId || '').trim();
+
+        console.log(`[test-welcome] guildId=${guildId} | channelId=${channelId}`);
 
         if (!channelId) {
             return res.status(400).json({
                 success: false,
-                error: 'لم يتم تحديد روم الترحيب. اختر الروم من القائمة واضغط "حفظ وتطبيق" أولاً.'
+                error: 'لم يتم تحديد روم الترحيب. اختر السيرفر والروم من القائمة واضغط "حفظ وتطبيق" أولاً.'
             });
         }
 
-        // ── جلب القناة مباشرة بالـ ID (الأكثر موثوقية — لا يحتاج guild في الـ cache) ──
+        // جلب القناة مباشرة بالـ ID
         let channel;
         try {
             channel = await client.channels.fetch(channelId);
         } catch (e) {
             return res.status(404).json({
                 success: false,
-                error: `البوت لا يستطيع الوصول للقناة (ID: ${channelId}). تأكد أن البوت عنده صلاحية "View Channel" و "Send Messages" في هذه القناة.`
+                error: `البوت لا يستطيع الوصول للقناة (ID: ${channelId}).\n• تأكد أن البوت عنده صلاحية "View Channel" و "Send Messages"\n• تأكد أن رقم القناة صحيح`
             });
         }
 
@@ -346,17 +306,30 @@ router.post('/test-welcome', async (req, res) => {
             return res.status(400).json({ success: false, error: 'القناة المختارة ليست قناة نصية.' });
         }
 
-        // ── جلب السيرفر من القناة مباشرة (لا حاجة لـ guilds.fetch) ───────────────
         const guild = channel.guild;
         if (!guild) {
             return res.status(404).json({ success: false, error: 'القناة ليست في سيرفر ديسكورد.' });
         }
 
-        // ── جلب عضو للتجربة ──────────────────────────────────────────────────────
+        // التحقق من صلاحيات البوت
+        const botMember = guild.members.me;
+        if (!botMember) {
+            return res.status(403).json({ success: false, error: 'البوت ليس في هذا السيرفر!' });
+        }
+        const perms = channel.permissionsFor(botMember);
+        if (!perms?.has(PermissionsBitField.Flags.SendMessages)) {
+            return res.status(403).json({
+                success: false,
+                error: `❌ البوت لا يملك صلاحية "Send Messages" في #${channel.name}!\nيرجى إضافة الصلاحية من إعدادات السيرفر.`
+            });
+        }
+
+        // جلب عضو للتجربة
         let testMember = null;
-        // 1. حاول جلب صاحب الداشبورد
-        try { testMember = await guild.members.fetch(req.user.id); } catch {}
-        // 2. احتياطي: البوت نفسه
+        const tryId = req.user?.userId || req.user?.id;
+        if (tryId) {
+            try { testMember = await guild.members.fetch(tryId); } catch {}
+        }
         if (!testMember) {
             try { testMember = await guild.members.fetch(client.user.id); } catch {}
         }
@@ -367,15 +340,71 @@ router.post('/test-welcome', async (req, res) => {
             });
         }
 
-        // ── إرسال رسالة الترحيب التجريبية ───────────────────────────────────────
+        // إرسال رسالة الترحيب التجريبية
         await sendWelcomeToChannel(channel, testMember, settings);
-        res.json({ success: true, message: `✅ تم إرسال رسالة ترحيب تجريبية إلى #${channel.name} في ${guild.name}` });
+        res.json({
+            success: true,
+            message: `✅ تم إرسال رسالة ترحيب تجريبية إلى #${channel.name} في سيرفر "${guild.name}" بنجاح! 🎉`
+        });
 
     } catch (err) {
-        console.error('[test-welcome]', err);
+        console.error('[test-welcome] خطأ:', err);
         res.status(500).json({ success: false, error: `خطأ داخلي: ${err.message}` });
     }
 });
 
-module.exports = router;
+// ──────────────────────────────────────────────────────────────────────────────
+// الإشراف — تنفيذ إجراء على عضو من داشبورد مالك البوت
+// ──────────────────────────────────────────────────────────────────────────────
+router.post('/moderate', async (req, res) => {
+    const { userId, guildId, action, reason } = req.body;
+    const client = req.app.get('client');
 
+    if (!userId || !guildId || !action) {
+        return res.status(400).json({ success: false, error: 'بيانات ناقصة: userId, guildId, action مطلوبة' });
+    }
+
+    if (!client?.isReady()) {
+        return res.status(503).json({ success: false, error: 'البوت غير متصل' });
+    }
+
+    try {
+        const guild = await client.guilds.fetch(guildId).catch(() => null);
+        if (!guild) return res.status(404).json({ success: false, error: 'السيرفر غير موجود أو البوت ليس فيه' });
+
+        const member = await guild.members.fetch(userId).catch(() => null);
+        if (!member) return res.status(404).json({ success: false, error: 'العضو غير موجود في السيرفر' });
+
+        const auditReason = `[Dashboard] ${action} by Bot Owner - ${reason || 'No reason'}`;
+
+        switch (action) {
+            case 'warn': {
+                const userData = db.getUserData(userId);
+                const warns = (userData.warnings || 0) + 1;
+                db.updateFields ? db.updateFields(userId, { warnings: warns }) : db.updateUserData(userId, { warnings: warns });
+                try {
+                    await member.send(`⚠️ تلقيت تحذيراً في **${guild.name}**!\nالسبب: ${reason || 'لم يُذكر'}\nإجمالي تحذيراتك: ${warns}`);
+                } catch {}
+                return res.json({ success: true, message: `✅ تم تحذير ${member.user.tag} (تحذيرات: ${warns})` });
+            }
+            case 'kick':
+                await member.kick(auditReason);
+                return res.json({ success: true, message: `✅ تم طرد ${member.user.tag}` });
+            case 'ban':
+                await guild.members.ban(userId, { reason: auditReason });
+                return res.json({ success: true, message: `✅ تم حظر ${member.user.tag}` });
+            case 'timeout': {
+                const duration = 10 * 60 * 1000; // 10 دقائق
+                await member.timeout(duration, auditReason);
+                return res.json({ success: true, message: `✅ تم إيقاف ${member.user.tag} مؤقتاً لمدة 10 دقائق` });
+            }
+            default:
+                return res.status(400).json({ success: false, error: `إجراء غير معروف: ${action}` });
+        }
+    } catch (err) {
+        console.error('[moderate]', err);
+        res.status(500).json({ success: false, error: `خطأ: ${err.message}` });
+    }
+});
+
+module.exports = router;

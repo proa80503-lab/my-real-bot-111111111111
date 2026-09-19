@@ -303,7 +303,7 @@ router.post('/protection', (req, res) => {
 
 /**
  * GET /server/:guildId/welcome-settings
- * يُرجع إعدادات الترحيب الحالية لهذا السيرفر (للعرض فقط).
+ * يُرجع إعدادات الترحيب الحالية لهذا السيرفر.
  */
 router.get('/welcome-settings', async (req, res) => {
     const { guildId } = req.params;
@@ -331,6 +331,95 @@ router.get('/welcome-settings', async (req, res) => {
         welcomeAvatarSize:   guildData.welcomeAvatarSize ?? 256,
         welcomeAvatarRadius: guildData.welcomeAvatarRadius ?? 50,
     });
+});
+
+/**
+ * POST /server/:guildId/welcome-settings
+ * يحفظ إعدادات الترحيب لهذا السيرفر مباشرة (مالك السيرفر يستطيع الآن ضبط ترحيبه)
+ */
+router.post('/welcome-settings', async (req, res) => {
+    const { guildId } = req.params;
+    const {
+        welcomeEnabled, welcomeChannel: channelId,
+        welcomeImage, welcomeAvatarX, welcomeAvatarY,
+        welcomeAvatarSize, welcomeAvatarRadius
+    } = req.body;
+
+    const updates = {};
+    if (welcomeEnabled !== undefined) updates.welcomeEnabled = Boolean(welcomeEnabled);
+    if (channelId !== undefined) updates.welcomeChannel = channelId || null;
+    if (welcomeImage !== undefined) updates.welcomeImage = welcomeImage || null;
+    if (welcomeAvatarX !== undefined) updates.welcomeAvatarX = Number(welcomeAvatarX) || 960;
+    if (welcomeAvatarY !== undefined) updates.welcomeAvatarY = Number(welcomeAvatarY) || 540;
+    if (welcomeAvatarSize !== undefined) updates.welcomeAvatarSize = Number(welcomeAvatarSize) || 256;
+    if (welcomeAvatarRadius !== undefined) updates.welcomeAvatarRadius = Number(welcomeAvatarRadius) || 50;
+
+    db.updateGuildData(guildId, updates);
+    console.log(`[ServerOwner/Welcome] ✅ تم حفظ إعدادات الترحيب لـ Guild ${guildId}:`, updates);
+
+    res.json({ success: true, message: 'تم حفظ إعدادات الترحيب ✅' });
+});
+
+/**
+ * POST /server/:guildId/test-welcome
+ * تجربة إرسال ترحيب للسيرفر
+ */
+router.post('/test-welcome', async (req, res) => {
+    const { guildId } = req.params;
+    const client = req.app.get('client');
+
+    if (!client?.isReady()) {
+        return res.status(503).json({ success: false, error: 'البوت غير متصل' });
+    }
+
+    const guildData = db.getGuildData(guildId);
+    const channelId = guildData.welcomeChannel;
+
+    if (!channelId) {
+        return res.status(400).json({
+            success: false,
+            error: 'لم يتم تحديد قناة ترحيب. اختر القناة من الإعدادات أولاً.'
+        });
+    }
+
+    try {
+        const channel = await client.channels.fetch(channelId).catch(() => null);
+        if (!channel || !channel.isTextBased()) {
+            return res.status(404).json({ success: false, error: 'القناة غير موجودة أو ليست نصية' });
+        }
+
+        const guild = await client.guilds.fetch(guildId).catch(() => null);
+        if (!guild) return res.status(404).json({ success: false, error: 'السيرفر غير موجود' });
+
+        const { PermissionsBitField } = require('discord.js');
+        const botMember = guild.members.me;
+        if (!botMember?.permissions.has(PermissionsBitField.Flags.SendMessages)) {
+            return res.status(403).json({
+                success: false,
+                error: `❌ البوت لا يملك صلاحية الإرسال في #${channel.name}`
+            });
+        }
+
+        // جلب عضو للتجربة
+        let testMember = null;
+        const tryId = req.user?.userId || req.user?.id;
+        if (tryId) { try { testMember = await guild.members.fetch(tryId); } catch {} }
+        if (!testMember) { try { testMember = await guild.members.fetch(client.user.id); } catch {} }
+        if (!testMember) {
+            return res.status(404).json({ success: false, error: 'تعذّر جلب عضو للتجربة' });
+        }
+
+        const { sendWelcomeToChannel } = require('../../../utils/welcome');
+        await sendWelcomeToChannel(channel, testMember, guildData);
+
+        res.json({
+            success: true,
+            message: `✅ تم إرسال رسالة ترحيب تجريبية إلى #${channel.name} بنجاح! 🎉`
+        });
+    } catch (err) {
+        console.error('[ServerOwner/test-welcome]', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -399,3 +488,4 @@ router.get('/roles', async (req, res) => {
 });
 
 module.exports = router;
+

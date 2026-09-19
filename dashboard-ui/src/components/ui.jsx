@@ -46,6 +46,7 @@ export function Sidebar({ activeSection, onSection, role, user, onLogout, select
     { id: 'overview', icon: '📊', label: 'نظرة عامة' },
     { id: 'colors', icon: '🎨', label: 'نظام الألوان' },
     { id: 'logs', icon: '📋', label: 'قناة السجلات' },
+    { id: 'welcome', icon: '👋', label: 'إعدادات الترحيب' },
     { id: 'protection', icon: '🛡️', label: 'الحماية' },
     { id: 'roles', icon: '🏷️', label: 'الأدوار' },
     { id: 'leaderboard', icon: '🏆', label: 'المتصدرون' },
