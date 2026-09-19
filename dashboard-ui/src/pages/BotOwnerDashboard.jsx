@@ -725,11 +725,30 @@ function WelcomeSection({ stats, toast }) {
 
           <div className="form-group">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <label className="form-label" style={{ margin: 0 }}>🖼️ صورة الخلفية (URL)</label>
-              <a href="https://imgbb.com/" target="_blank" rel="noreferrer" className="btn btn-sm btn-ghost" style={{ fontSize: 11 }}>☁️ رفع صورة</a>
+              <label className="form-label" style={{ margin: 0 }}>🖼️ صورة الترحيب</label>
+              {s.welcomeImage && (
+                  <button className="btn btn-sm btn-danger" onClick={() => setS({ ...s, welcomeImage: '', welcomeImageBase64: '', deleteWelcomeImage: true })}>🗑️ حذف الصورة نهائياً</button>
+              )}
             </div>
-            <input type="text" className="form-input" placeholder="مثال: https://i.ibb.co/xyz/image.png (تأكد أن الرابط ينتهي بـ png أو jpg)" value={s.welcomeImage || ''} onChange={e => setS({ ...s, welcomeImage: e.target.value })} />
-            <div className="form-hint" style={{ color: 'var(--yellow)', marginTop: 5 }}>⚠️ تنبيه: يجب أن يكون الرابط <strong>مباشراً</strong> للصورة (لا تضع رابط صفحة الويب).</div>
+            
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <label className="btn btn-primary" style={{ flex: 1, cursor: 'pointer', textAlign: 'center' }}>
+                ☁️ اختر صورة من جهازك
+                <input type="file" accept="image/png, image/jpeg, image/webp" style={{ display: 'none' }} onChange={e => {
+                  const file = e.target.files[0];
+                  if (!file) return;
+                  if (file.size > 5 * 1024 * 1024) return toast('حجم الصورة كبير جداً! (الحد الأقصى 5 ميجابايت)', 'error');
+                  
+                  const reader = new FileReader();
+                  reader.onload = (ev) => {
+                    setS({ ...s, welcomeImage: ev.target.result, welcomeImageBase64: ev.target.result, deleteWelcomeImage: false });
+                  };
+                  reader.readAsDataURL(file);
+                }} />
+              </label>
+            </div>
+            <div className="form-hint" style={{ color: 'var(--muted)', marginTop: 8 }}>أو يمكنك وضع رابط مباشر للصورة هنا:</div>
+            <input type="text" className="form-input" style={{ marginTop: 5 }} placeholder="https://..." value={!s.welcomeImage?.startsWith('data:') && !s.welcomeImage?.startsWith('/uploads/') ? (s.welcomeImage || '') : ''} onChange={e => setS({ ...s, welcomeImage: e.target.value, welcomeImageBase64: '', deleteWelcomeImage: false })} />
           </div>
 
           {[

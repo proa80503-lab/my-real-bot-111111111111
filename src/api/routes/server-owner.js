@@ -348,11 +348,36 @@ router.post('/welcome-settings', async (req, res) => {
     const updates = {};
     if (welcomeEnabled !== undefined) updates.welcomeEnabled = Boolean(welcomeEnabled);
     if (channelId !== undefined) updates.welcomeChannel = channelId || null;
-    if (welcomeImage !== undefined) updates.welcomeImage = welcomeImage || null;
     if (welcomeAvatarX !== undefined) updates.welcomeAvatarX = Number(welcomeAvatarX) || 960;
     if (welcomeAvatarY !== undefined) updates.welcomeAvatarY = Number(welcomeAvatarY) || 540;
     if (welcomeAvatarSize !== undefined) updates.welcomeAvatarSize = Number(welcomeAvatarSize) || 256;
     if (welcomeAvatarRadius !== undefined) updates.welcomeAvatarRadius = Number(welcomeAvatarRadius) || 50;
+
+    const fs = require('fs');
+    const path = require('path');
+    const uploadsDir = path.join(process.cwd(), 'data', 'uploads');
+
+    if (req.body.deleteWelcomeImage) {
+        updates.welcomeImage = null;
+        const oldPath = path.join(uploadsDir, `welcome_bg_${guildId}.png`);
+        if (fs.existsSync(oldPath)) {
+            try { fs.unlinkSync(oldPath); } catch(e) { console.error('Failed to delete old image', e); }
+        }
+    } else if (req.body.welcomeImageBase64) {
+        try {
+            if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+            const base64Data = req.body.welcomeImageBase64.replace(/^data:image\/\w+;base64,/, '');
+            const buffer = Buffer.from(base64Data, 'base64');
+            const fileName = `welcome_bg_${guildId}.png`;
+            fs.writeFileSync(path.join(uploadsDir, fileName), buffer);
+            
+            updates.welcomeImage = `/uploads/${fileName}`;
+        } catch (uploadErr) {
+            console.error('[ServerOwner/Welcome] فشل حفظ الصورة المرفوعة:', uploadErr);
+        }
+    } else if (welcomeImage !== undefined) {
+        updates.welcomeImage = welcomeImage || null;
+    }
 
     db.updateGuildData(guildId, updates);
     console.log(`[ServerOwner/Welcome] ✅ تم حفظ إعدادات الترحيب لـ Guild ${guildId}:`, updates);

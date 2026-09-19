@@ -23,9 +23,13 @@ const corsOptions = process.env.DASHBOARD_ORIGIN
     ? { origin: process.env.DASHBOARD_ORIGIN, credentials: true }
     : { origin: false };
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '100kb' }));
+app.use(express.json({ limit: '10mb' }));
 
-// ─── Load Routers ──────────────────────────────────────────────────────────────
+// مسار للصور المرفوعة محلياً
+const uploadsPath = path.join(__dirname, '../../data/uploads');
+app.use('/uploads', express.static(uploadsPath));
+
+// 📁 Load Routers 📁──────────────────────────────────────────────────────────────
 const authRouter       = require('./routes/auth');
 const botOwnerRouter   = require('./routes/bot-owner');
 const serverOwnerRouter = require('./routes/server-owner');

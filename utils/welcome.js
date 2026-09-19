@@ -28,6 +28,13 @@ const REQUIRED_PERMS_EMBED = [
 
 // ── جلب صورة كـ Buffer ────────────────────────────────────────────────────────
 async function fetchImageBuffer(url) {
+    if (url.startsWith('/uploads/')) {
+        const fs = require('fs');
+        const path = require('path');
+        // مسار الصورة المحلي نسبة لمجلد التشغيل
+        const localPath = path.join(process.cwd(), 'data', url);
+        return fs.promises.readFile(localPath);
+    }
     const res = await fetch(url, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
         signal: AbortSignal.timeout(10_000),

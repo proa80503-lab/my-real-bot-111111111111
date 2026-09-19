@@ -168,12 +168,40 @@ router.post('/settings', (req, res) => {
 
         if (body.welcomeChannelId !== undefined) guildUpdates.welcomeChannel = body.welcomeChannelId || null;
         if (body.welcomeEnabled   !== undefined) guildUpdates.welcomeEnabled = Boolean(body.welcomeEnabled);
-        if (body.welcomeImage     !== undefined) guildUpdates.welcomeImage   = body.welcomeImage || null;
         if (body.welcomeAvatarX   !== undefined) guildUpdates.welcomeAvatarX = Number(body.welcomeAvatarX) || 960;
         if (body.welcomeAvatarY   !== undefined) guildUpdates.welcomeAvatarY = Number(body.welcomeAvatarY) || 540;
         if (body.welcomeAvatarWidth  !== undefined) guildUpdates.welcomeAvatarSize = Number(body.welcomeAvatarWidth) || 256;
         if (body.welcomeAvatarHeight !== undefined) guildUpdates.welcomeAvatarSize = Number(body.welcomeAvatarHeight) || 256;
         if (body.welcomeAvatarRadius !== undefined) guildUpdates.welcomeAvatarRadius = Number(body.welcomeAvatarRadius) || 50;
+
+        const fs = require('fs');
+        const path = require('path');
+        const uploadsDir = path.join(process.cwd(), 'data', 'uploads');
+
+        if (body.deleteWelcomeImage) {
+            botSettings.set('welcomeImage', null);
+            guildUpdates.welcomeImage = null;
+            const oldPath = path.join(uploadsDir, `welcome_bg_${targetGuildId}.png`);
+            if (fs.existsSync(oldPath)) {
+                try { fs.unlinkSync(oldPath); } catch(e) { console.error('Failed to delete old image', e); }
+            }
+        } else if (body.welcomeImageBase64) {
+            try {
+                if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+                const base64Data = body.welcomeImageBase64.replace(/^data:image\/\w+;base64,/, '');
+                const buffer = Buffer.from(base64Data, 'base64');
+                const fileName = `welcome_bg_${targetGuildId}.png`;
+                fs.writeFileSync(path.join(uploadsDir, fileName), buffer);
+                
+                const localUrl = `/uploads/${fileName}`;
+                botSettings.set('welcomeImage', localUrl);
+                guildUpdates.welcomeImage = localUrl;
+            } catch (uploadErr) {
+                console.error('[BotOwner/Settings] فشل حفظ الصورة المرفوعة:', uploadErr);
+            }
+        } else if (body.welcomeImage !== undefined) {
+            guildUpdates.welcomeImage = body.welcomeImage || null;
+        }
 
         if (Object.keys(guildUpdates).length > 0) {
             db.updateGuildData(targetGuildId, guildUpdates);
