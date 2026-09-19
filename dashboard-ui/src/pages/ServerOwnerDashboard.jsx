@@ -418,15 +418,16 @@ function WelcomeSection({ guildId, channels, toast }) {
           <div className="form-group">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <label className="form-label" style={{ margin: 0 }}>🖼️ صورة الخلفية (URL)</label>
-              <a href="https://imgbb.com/" target="_blank" rel="noreferrer" className="btn btn-sm btn-ghost" style={{ fontSize: 11 }}>☁️ رفع</a>
+              <a href="https://imgbb.com/" target="_blank" rel="noreferrer" className="btn btn-sm btn-ghost" style={{ fontSize: 11 }}>☁️ رفع صورة</a>
             </div>
             <input
               type="text"
               className="form-input"
-              placeholder="https://i.ibb.co/.../image.png"
+              placeholder="مثال: https://i.ibb.co/xyz/image.png (تأكد أن الرابط مباشر)"
               value={ws.welcomeImage || ''}
               onChange={e => setWs({ ...ws, welcomeImage: e.target.value })}
             />
+            <div className="form-hint" style={{ color: 'var(--yellow)', marginTop: 5 }}>⚠️ تنبيه: يجب أن يكون الرابط <strong>مباشراً</strong> للصورة (ينتهي بـ png أو jpg).</div>
           </div>
 
           {[

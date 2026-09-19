@@ -728,7 +728,8 @@ function WelcomeSection({ stats, toast }) {
               <label className="form-label" style={{ margin: 0 }}>🖼️ صورة الخلفية (URL)</label>
               <a href="https://imgbb.com/" target="_blank" rel="noreferrer" className="btn btn-sm btn-ghost" style={{ fontSize: 11 }}>☁️ رفع صورة</a>
             </div>
-            <input type="text" className="form-input" placeholder="https://i.ibb.co/.../image.png" value={s.welcomeImage || ''} onChange={e => setS({ ...s, welcomeImage: e.target.value })} />
+            <input type="text" className="form-input" placeholder="مثال: https://i.ibb.co/xyz/image.png (تأكد أن الرابط ينتهي بـ png أو jpg)" value={s.welcomeImage || ''} onChange={e => setS({ ...s, welcomeImage: e.target.value })} />
+            <div className="form-hint" style={{ color: 'var(--yellow)', marginTop: 5 }}>⚠️ تنبيه: يجب أن يكون الرابط <strong>مباشراً</strong> للصورة (لا تضع رابط صفحة الويب).</div>
           </div>
 
           {[

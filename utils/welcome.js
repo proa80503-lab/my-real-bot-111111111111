@@ -39,7 +39,7 @@ async function fetchImageBuffer(url) {
 // ── بناء صورة الترحيب بـ Canvas ──────────────────────────────────────────────
 async function buildWelcomeImage(guildData, member) {
     const imageUrl = String(guildData.welcomeImage || '').trim();
-    if (!imageUrl) return null;
+    if (!imageUrl) return { attachment: null, error: 'رابط الصورة غير موجود' };
 
     try {
         const { createCanvas, loadImage } = require('canvas');
@@ -48,7 +48,13 @@ async function buildWelcomeImage(guildData, member) {
 
         // 1. الخلفية
         const bgBuf = await fetchImageBuffer(imageUrl);
-        ctx.drawImage(await loadImage(bgBuf), 0, 0, 1920, 1080);
+        let bgImg;
+        try {
+            bgImg = await loadImage(bgBuf);
+        } catch (loadErr) {
+            throw new Error(`تعذر قراءة الصورة (تأكد أن الرابط مباشر لصورة وليس لصفحة ويب، مثال: ينتهي بـ .png أو .jpg)`);
+        }
+        ctx.drawImage(bgImg, 0, 0, 1920, 1080);
 
         // 2. إعدادات الصورة الرمزية
         const aX      = Number(guildData.welcomeAvatarX)    || 960;
@@ -77,16 +83,24 @@ async function buildWelcomeImage(guildData, member) {
         ctx.clip();
 
         // 4. رسم صورة العضو
-        const avatarUrl = member.user.displayAvatarURL({ extension: 'png', size: 256, forceStatic: true });
-        const avBuf     = await fetchImageBuffer(avatarUrl);
-        ctx.drawImage(await loadImage(avBuf), startX, startY, aW, aH);
+        let avBuf;
+        try {
+            const avatarUrl = member.user.displayAvatarURL({ extension: 'png', size: 256, forceStatic: true });
+            avBuf = await fetchImageBuffer(avatarUrl);
+            ctx.drawImage(await loadImage(avBuf), startX, startY, aW, aH);
+        } catch (avErr) {
+            console.error('[Welcome] فشل تحميل صورة العضو:', avErr.message);
+            // تجاهل خطأ صورة العضو وأكمل الرسم بدونها أو ارسم مربع فارغ
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillRect(startX, startY, aW, aH);
+        }
         ctx.restore();
 
         console.log(`[Welcome] ✅ تم بناء صورة الترحيب للعضو ${member.user.tag}`);
-        return new AttachmentBuilder(canvas.toBuffer('image/png'), { name: 'welcome.png' });
+        return { attachment: new AttachmentBuilder(canvas.toBuffer('image/png'), { name: 'welcome.png' }), error: null };
     } catch (err) {
         console.error(`[Welcome] ⚠️ فشل بناء الصورة (لن يُوقف الإرسال):`, err.message);
-        return null; // الإرسال يستمر بدون صورة
+        return { attachment: null, error: err.message };
     }
 }
 
@@ -190,8 +204,11 @@ async function sendWelcome(member) {
 
     // ── [8] بناء الصورة (اختياري) ───────────────────────────────────────────
     let attachment = null;
+    let imgError = null;
     if (hasImage) {
-        attachment = await buildWelcomeImage(guildData, member);
+        const result = await buildWelcomeImage(guildData, member);
+        attachment = result.attachment;
+        imgError = result.error;
     }
 
     // ── [9] إرسال رسالة الترحيب ─────────────────────────────────────────────
@@ -199,7 +216,11 @@ async function sendWelcome(member) {
         const payload = {
             content: `||@everyone|| 🎊 مرحباً بك يا ${member}! نورت سيرفر **${member.guild.name}**!`,
         };
-        if (attachment) payload.files = [attachment];
+        if (attachment) {
+            payload.files = [attachment];
+        } else if (hasImage) {
+            payload.content += `\n\n*(⚠️ فشل إنشاء صورة الترحيب: ${imgError})*`;
+        }
         await welcomeChannel.send(payload);
         console.log(`[Welcome] ✅ تم إرسال ترحيب للعضو ${tag} في #${welcomeChannel.name}`);
     } catch (sendErr) {
@@ -238,12 +259,26 @@ async function sendWelcomeToChannel(channel, member, overrideSettings = {}) {
     // دمج إعدادات الـ Guild مع أي override من الـ Dashboard
     const guildData = member?.guild?.id ? db.getGuildData(member.guild.id) : {};
     const settings  = { ...guildData, ...overrideSettings };
+    const hasImage = Boolean(settings.welcomeImage);
 
-    const attachment = await buildWelcomeImage(settings, member);
+    let attachment = null;
+    let imgError = null;
+    if (hasImage) {
+        const result = await buildWelcomeImage(settings, member);
+        attachment = result.attachment;
+        imgError = result.error;
+    }
+
     const payload = {
         content: `||@everyone|| 🎊 **[تجربة]** مرحباً بك يا ${member}! نورت سيرفر **${member.guild.name}**!`,
     };
-    if (attachment) payload.files = [attachment];
+    
+    if (attachment) {
+        payload.files = [attachment];
+    } else if (hasImage) {
+        payload.content += `\n\n*(⚠️ فشل إنشاء صورة الترحيب: ${imgError})*`;
+    }
+    
     await channel.send(payload);
     console.log(`[Welcome] 🧪 تجربة ترحيب تم إرسالها إلى #${channel.name} في ${member.guild.name}`);
 }
