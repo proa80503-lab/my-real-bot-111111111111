@@ -182,9 +182,19 @@ function addTransaction(userId, type, amount, description) {
 // ─── Guilds ───────────────────────────────────────────────────────────────
 function _defaultGuild(guildId) {
     return {
-        guildId, bankChannel: null, jailRole: null, muteRole: null, logChannel: null, punishmentsChannel: null,
-        gamesChannel: null, welcomeChannel: null, colorChannelId: null, colorMessageId: null, logChannelId: null,
-        protectionSettings: {}, welcomeImage: null, welcomeAvatarX: 0, welcomeAvatarY: 0, welcomeAvatarSize: 128, welcomeAvatarRadius: 50,
+        guildId,
+        // إعدادات الترحيب (per-guild) — المصدر الوحيد للحقيقة
+        welcomeEnabled: false,
+        welcomeChannel: null,
+        welcomeImage: null,
+        welcomeAvatarX: 960,
+        welcomeAvatarY: 540,
+        welcomeAvatarSize: 256,
+        welcomeAvatarRadius: 50,
+        // إعدادات أخرى
+        bankChannel: null, jailRole: null, muteRole: null, logChannel: null, punishmentsChannel: null,
+        gamesChannel: null, colorChannelId: null, colorMessageId: null, logChannelId: null,
+        protectionSettings: {},
         setupComplete: false, prefix: '!', language: 'ar', economyEnabled: true, gamesEnabled: true, aiEnabled: true,
         autoModEnabled: true, antiSpamEnabled: true, antiLinkEnabled: false, antiCapsEnabled: true, antiRaidEnabled: true
     };

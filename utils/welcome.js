@@ -1,27 +1,48 @@
 'use strict';
 
-const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
-const config      = require('../config');
-const botSettings = require('../src/database/bot-settings-db');
-const db          = require('../src/database/db');
-const { createCanvas, loadImage } = require('canvas');
+/**
+ * welcome.js — نظام الترحيب
+ *
+ * ══════════════════════════════════════════════════════════
+ *  مصدر البيانات الوحيد: Guild DB (per-guild)
+ *  ─ welcomeEnabled  : هل الترحيب مفعّل لهذا السيرفر؟
+ *  ─ welcomeChannel  : ID قناة الترحيب
+ *  ─ welcomeImage    : رابط صورة الخلفية (اختياري)
+ *  ─ welcomeAvatarX/Y/Size/Radius : إعدادات موضع الصورة الرمزية
+ * ══════════════════════════════════════════════════════════
+ */
 
-// ── جلب صورة كـ Buffer ─────────────────────────────────────────────────────────
+const { EmbedBuilder, AttachmentBuilder, PermissionsBitField } = require('discord.js');
+const db = require('../src/database/db');
+
+// ── الصلاحيات المطلوبة لإرسال الترحيب ────────────────────────────────────────
+const REQUIRED_PERMS = [
+    PermissionsBitField.Flags.ViewChannel,
+    PermissionsBitField.Flags.SendMessages,
+];
+const REQUIRED_PERMS_EMBED = [
+    ...REQUIRED_PERMS,
+    PermissionsBitField.Flags.EmbedLinks,
+    PermissionsBitField.Flags.AttachFiles,
+];
+
+// ── جلب صورة كـ Buffer ────────────────────────────────────────────────────────
 async function fetchImageBuffer(url) {
     const res = await fetch(url, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-        signal: AbortSignal.timeout(10000), // timeout 10 ثانية
+        signal: AbortSignal.timeout(10_000),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status} للرابط: ${url}`);
     return Buffer.from(await res.arrayBuffer());
 }
 
-// ── بناء صورة الترحيب Canvas ───────────────────────────────────────────────────
-async function buildWelcomeImage(settings, member) {
-    const imageUrl = String(settings.welcomeImage || '').trim();
+// ── بناء صورة الترحيب بـ Canvas ──────────────────────────────────────────────
+async function buildWelcomeImage(guildData, member) {
+    const imageUrl = String(guildData.welcomeImage || '').trim();
     if (!imageUrl) return null;
 
     try {
+        const { createCanvas, loadImage } = require('canvas');
         const canvas = createCanvas(1920, 1080);
         const ctx    = canvas.getContext('2d');
 
@@ -30,11 +51,11 @@ async function buildWelcomeImage(settings, member) {
         ctx.drawImage(await loadImage(bgBuf), 0, 0, 1920, 1080);
 
         // 2. إعدادات الصورة الرمزية
-        const aX      = Number(settings.welcomeAvatarX)      || 960;
-        const aY      = Number(settings.welcomeAvatarY)      || 540;
-        const aW      = Number(settings.welcomeAvatarWidth)  || 256;
-        const aH      = Number(settings.welcomeAvatarHeight) || 256;
-        const aRadius = Number(settings.welcomeAvatarRadius) || 50;
+        const aX      = Number(guildData.welcomeAvatarX)    || 960;
+        const aY      = Number(guildData.welcomeAvatarY)    || 540;
+        const aW      = Number(guildData.welcomeAvatarSize) || 256;
+        const aH      = aW; // دائماً مربّع
+        const aRadius = Number(guildData.welcomeAvatarRadius) || 50;
 
         const startX       = aX - aW / 2;
         const startY       = aY - aH / 2;
@@ -61,106 +82,170 @@ async function buildWelcomeImage(settings, member) {
         ctx.drawImage(await loadImage(avBuf), startX, startY, aW, aH);
         ctx.restore();
 
-        console.log('[Welcome] ✅ تم بناء صورة الترحيب');
+        console.log(`[Welcome] ✅ تم بناء صورة الترحيب للعضو ${member.user.tag}`);
         return new AttachmentBuilder(canvas.toBuffer('image/png'), { name: 'welcome.png' });
     } catch (err) {
-        console.error('[Welcome] ❌ فشل بناء الصورة:', err.message);
-        return null;
+        console.error(`[Welcome] ⚠️ فشل بناء الصورة (لن يُوقف الإرسال):`, err.message);
+        return null; // الإرسال يستمر بدون صورة
     }
 }
 
-// ── الدالة الرئيسية للترحيب ────────────────────────────────────────────────────
+// ── فحص صلاحيات البوت في القناة ──────────────────────────────────────────────
+function checkBotPermissions(channel, hasImage) {
+    const me = channel.guild?.members?.me;
+    if (!me) return { ok: false, missing: ['Bot member not found in guild'] };
+
+    const requiredPerms = hasImage ? REQUIRED_PERMS_EMBED : REQUIRED_PERMS;
+    const missing = requiredPerms
+        .filter(perm => !channel.permissionsFor(me).has(perm))
+        .map(perm => Object.keys(PermissionsBitField.Flags).find(k => PermissionsBitField.Flags[k] === perm) || String(perm));
+
+    return { ok: missing.length === 0, missing };
+}
+
+// ── الدالة الرئيسية للترحيب ───────────────────────────────────────────────────
 async function sendWelcome(member) {
+    const guildId  = member.guild.id;
+    const memberId = member.user.id;
+    const tag      = member.user.tag;
+
+    // ── [1] قراءة إعدادات السيرفر — المصدر الوحيد ───────────────────────────
+    const guildData = db.getGuildData(guildId);
+
+    // ── [2] هل الترحيب مفعّل؟ ───────────────────────────────────────────────
+    if (!guildData.welcomeEnabled) {
+        console.log(`[Welcome] ⏭️  الترحيب معطّل في Guild ${guildId} — لا يوجد إجراء`);
+        return;
+    }
+
+    // ── [3] هل تم تحديد قناة ترحيب؟ ────────────────────────────────────────
+    const channelId = guildData.welcomeChannel;
+    if (!channelId) {
+        console.warn(
+            `[Welcome] ⚠️  Guild: ${guildId} | Member: ${memberId} (${tag})\n` +
+            `  → الترحيب مفعّل لكن لم يتم تحديد قناة ترحيب.\n` +
+            `  → الحل: اذهب للـ Dashboard وحدد روم الترحيب.`
+        );
+        return;
+    }
+
+    // ── [4] جلب القناة من Discord ────────────────────────────────────────────
+    let welcomeChannel = null;
     try {
-        // جمع الإعدادات من المصدرين: botSettings + guildData
-        // guildData يأخذ الأولوية لصورة الترحيب والقناة إذا كانت موجودة فيه
-        const globalSettings = botSettings.getAll();
-        const guildData      = db.getGuildData(member.guild.id);
+        welcomeChannel = await member.client.channels.fetch(channelId);
+    } catch (fetchErr) {
+        console.error(
+            `[Welcome] ❌ فشل جلب قناة الترحيب\n` +
+            `  → Guild: ${guildId} | Member: ${memberId} (${tag})\n` +
+            `  → Channel ID: ${channelId}\n` +
+            `  → السبب: ${fetchErr.message}\n` +
+            `  → الحلول المقترحة:\n` +
+            `     • تأكد أن القناة لم تُحذف\n` +
+            `     • تأكد أن البوت لديه صلاحية View Channel في هذه القناة\n` +
+            `     • حدّث قناة الترحيب من الـ Dashboard`
+        );
+        return;
+    }
 
-        const settings = {
-            ...globalSettings,
-            // إذا وجدت صورة في guildData نستخدمها، وإلا نستخدم من botSettings
-            welcomeImage:       guildData.welcomeImage       || globalSettings.welcomeImage       || '',
-            welcomeAvatarX:     guildData.welcomeAvatarX     || globalSettings.welcomeAvatarX     || 960,
-            welcomeAvatarY:     guildData.welcomeAvatarY     || globalSettings.welcomeAvatarY     || 540,
-            welcomeAvatarWidth: guildData.welcomeAvatarSize  || globalSettings.welcomeAvatarWidth || 256,
-            welcomeAvatarHeight:guildData.welcomeAvatarSize  || globalSettings.welcomeAvatarHeight|| 256,
-            welcomeAvatarRadius:guildData.welcomeAvatarRadius|| globalSettings.welcomeAvatarRadius|| 50,
-            welcomeChannelId:   guildData.welcomeChannel     || globalSettings.welcomeChannelId   || '',
-        };
+    // ── [5] تأكد أن القناة تنتمي لنفس السيرفر ──────────────────────────────
+    if (welcomeChannel.guildId && welcomeChannel.guildId !== guildId) {
+        console.error(
+            `[Welcome] ❌ القناة ${channelId} تنتمي لسيرفر مختلف!\n` +
+            `  → Guild المتوقع: ${guildId}\n` +
+            `  → Guild الفعلي:  ${welcomeChannel.guildId}\n` +
+            `  → الحل: أعد تحديد قناة الترحيب الصحيحة من الـ Dashboard`
+        );
+        return;
+    }
 
-        console.log('[Welcome] 📋 Settings:', {
-            image: settings.welcomeImage ? '✅ موجودة' : '❌ غير موجودة',
-            channel: settings.welcomeChannelId || 'غير محدد'
-        });
+    // ── [6] تأكد أن القناة نصية ─────────────────────────────────────────────
+    if (!welcomeChannel.isTextBased()) {
+        console.error(
+            `[Welcome] ❌ القناة ${channelId} ليست قناة نصية\n` +
+            `  → Guild: ${guildId} | Type: ${welcomeChannel.type}`
+        );
+        return;
+    }
 
-        // ── تحديد قناة الترحيب ──────────────────────────────────────────────────
-        let welcomeChannel = null;
+    // ── [7] فحص صلاحيات البوت ───────────────────────────────────────────────
+    const hasImage = Boolean(guildData.welcomeImage);
+    const permCheck = checkBotPermissions(welcomeChannel, hasImage);
+    if (!permCheck.ok) {
+        console.error(
+            `[Welcome] ❌ البوت لا يملك الصلاحيات الكافية في قناة الترحيب\n` +
+            `  → Guild: ${guildId} | Channel: ${channelId} (#${welcomeChannel.name})\n` +
+            `  → الصلاحيات الناقصة: ${permCheck.missing.join(', ')}\n` +
+            `  → الحل: أضف الصلاحيات المطلوبة للبوت في إعدادات السيرفر`
+        );
+        return;
+    }
 
-        if (settings.welcomeChannelId) {
-            try {
-                // استخدم client.channels.fetch مباشرة — الأكثر موثوقية
-                welcomeChannel = await member.client.channels.fetch(settings.welcomeChannelId);
-            } catch (e) {
-                console.warn('[Welcome] فشل جلب القناة من الـ ID:', e.message);
-            }
-        }
+    console.log(
+        `[Welcome] 📨 بدء إرسال ترحيب\n` +
+        `  → Guild: ${guildId} (${member.guild.name})\n` +
+        `  → Member: ${memberId} (${tag})\n` +
+        `  → Channel: ${channelId} (#${welcomeChannel.name})\n` +
+        `  → Image: ${hasImage ? '✅ موجودة' : '❌ غير موجودة'}`
+    );
 
-        // احتياطي: قناة اسمها الترحيب أو systemChannel
-        if (!welcomeChannel) {
-            welcomeChannel = member.guild.channels.cache.find(
-                ch => ch.name === 'الترحيب' || ch.name === 'welcome' || ch.name === '👋┃الترحيب'
-            ) || member.guild.systemChannel;
-        }
+    // ── [8] بناء الصورة (اختياري) ───────────────────────────────────────────
+    let attachment = null;
+    if (hasImage) {
+        attachment = await buildWelcomeImage(guildData, member);
+    }
 
-        if (!welcomeChannel) {
-            console.warn('[Welcome] ⚠️ لم يُعثر على قناة ترحيب — اضبط Channel ID في لوحة التحكم');
-            return;
-        }
-
-        // ── بناء الصورة ──────────────────────────────────────────────────────────
-        const attachment = await buildWelcomeImage(settings, member);
-
-        // ── إرسال رسالة الترحيب ──────────────────────────────────────────────────
+    // ── [9] إرسال رسالة الترحيب ─────────────────────────────────────────────
+    try {
         const payload = {
             content: `||@everyone|| 🎊 مرحباً بك يا ${member}! نورت سيرفر **${member.guild.name}**!`,
         };
         if (attachment) payload.files = [attachment];
         await welcomeChannel.send(payload);
-        console.log(`[Welcome] ✅ ترحيب بـ ${member.user.tag} في #${welcomeChannel.name}`);
+        console.log(`[Welcome] ✅ تم إرسال ترحيب للعضو ${tag} في #${welcomeChannel.name}`);
+    } catch (sendErr) {
+        console.error(
+            `[Welcome] ❌ فشل إرسال رسالة الترحيب\n` +
+            `  → Guild: ${guildId} | Member: ${memberId} (${tag})\n` +
+            `  → Channel: ${channelId} (#${welcomeChannel.name})\n` +
+            `  → Discord Error: ${sendErr.message}`
+        );
+        return;
+    }
 
-        // ── رسالة خاصة ───────────────────────────────────────────────────────────
-        try {
-            const dmEmbed = new EmbedBuilder()
-                .setColor('#9B59B6')
-                .setTitle(`مرحباً بك في ${member.guild.name}! 👋`)
-                .setDescription(`أهلاً ${member.user.username}! نحن سعداء جداً بانضمامك!`)
-                .addFields(
-                    { name: '🎮 ابدأ الآن', value: '• `تفعيل` — لإعداد حسابك\n• `يومي` — مكافأة يومية\n• `!help` — جميع الأوامر' },
-                    { name: '💰 مكافأة الانضمام', value: `حصلت على **${config.startBalance} ${config.currency}** هدية ترحيب!` },
-                    { name: '📜 القوانين', value: 'تأكد من قراءة قوانين السيرفر!' }
-                )
-                .setThumbnail(member.guild.iconURL())
-                .setFooter({ text: 'استمتع بوقتك معنا! 🎉' })
-                .setTimestamp();
-            await member.send({ embeds: [dmEmbed] });
-        } catch {
-            console.log(`[Welcome] ℹ️ لا يمكن إرسال DM لـ ${member.user.tag}`);
-        }
-
-    } catch (error) {
-        console.error('[Welcome] ❌ خطأ عام:', error);
+    // ── [10] رسالة خاصة للعضو (DM) ─────────────────────────────────────────
+    try {
+        const { config } = (() => { try { return { config: require('../config') }; } catch { return { config: {} }; } })();
+        const dmEmbed = new EmbedBuilder()
+            .setColor('#9B59B6')
+            .setTitle(`مرحباً بك في ${member.guild.name}! 👋`)
+            .setDescription(`أهلاً ${member.user.username}! نحن سعداء جداً بانضمامك!`)
+            .addFields(
+                { name: '🎮 ابدأ الآن', value: '• `تفعيل` — لإعداد حسابك\n• `يومي` — مكافأة يومية\n• `!help` — جميع الأوامر' },
+                { name: '💰 مكافأة الانضمام', value: `حصلت على **${config.startBalance ?? 1000} ${config.currency ?? '💰'}** هدية ترحيب!` },
+                { name: '📜 القوانين', value: 'تأكد من قراءة قوانين السيرفر!' }
+            )
+            .setThumbnail(member.guild.iconURL())
+            .setFooter({ text: 'استمتع بوقتك معنا! 🎉' })
+            .setTimestamp();
+        await member.send({ embeds: [dmEmbed] });
+    } catch {
+        console.log(`[Welcome] ℹ️ لا يمكن إرسال DM لـ ${tag} (الخصوصية مغلقة أو Block)`);
     }
 }
 
-// ── دالة إرسال مباشر بقناة محددة (للتجربة من الداشبورد) ───────────────────────
-async function sendWelcomeToChannel(channel, member, settings) {
+// ── إرسال تجريبي مباشر لقناة محددة (من الـ Dashboard) ──────────────────────
+async function sendWelcomeToChannel(channel, member, overrideSettings = {}) {
+    // دمج إعدادات الـ Guild مع أي override من الـ Dashboard
+    const guildData = member?.guild?.id ? db.getGuildData(member.guild.id) : {};
+    const settings  = { ...guildData, ...overrideSettings };
+
     const attachment = await buildWelcomeImage(settings, member);
     const payload = {
         content: `||@everyone|| 🎊 **[تجربة]** مرحباً بك يا ${member}! نورت سيرفر **${member.guild.name}**!`,
     };
     if (attachment) payload.files = [attachment];
     await channel.send(payload);
+    console.log(`[Welcome] 🧪 تجربة ترحيب تم إرسالها إلى #${channel.name} في ${member.guild.name}`);
 }
 
 module.exports = { sendWelcome, sendWelcomeToChannel };

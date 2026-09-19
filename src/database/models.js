@@ -71,18 +71,23 @@ const guildSchema = new mongoose.Schema({
     logChannel: String,
     punishmentsChannel: String,
     gamesChannel: String,
-    welcomeChannel: String,
+
+    // ── نظام الترحيب (per-guild) ──────────────────────────────────────────
+    welcomeEnabled: { type: Boolean, default: false },   // هل نظام الترحيب مفعّل؟
+    welcomeChannel: { type: String, default: null },      // ID قناة الترحيب
+
+    // ── إعدادات صورة الترحيب (per-guild) ─────────────────────────────────
+    welcomeImage: { type: String, default: null },
+    welcomeAvatarX: { type: Number, default: 960 },
+    welcomeAvatarY: { type: Number, default: 540 },
+    welcomeAvatarSize: { type: Number, default: 256 },
+    welcomeAvatarRadius: { type: Number, default: 50 },
+
     colorChannelId: String,
     colorMessageId: String,
     logChannelId: String,
     protectionSettings: { type: Object, default: {} },
-    
-    welcomeImage: String,
-    welcomeAvatarX: { type: Number, default: 0 },
-    welcomeAvatarY: { type: Number, default: 0 },
-    welcomeAvatarSize: { type: Number, default: 128 },
-    welcomeAvatarRadius: { type: Number, default: 50 },
-    
+
     setupComplete: { type: Boolean, default: false },
     prefix: { type: String, default: '!' },
     language: { type: String, default: 'ar' },
@@ -94,7 +99,7 @@ const guildSchema = new mongoose.Schema({
     antiLinkEnabled: { type: Boolean, default: false },
     antiCapsEnabled: { type: Boolean, default: true },
     antiRaidEnabled: { type: Boolean, default: true }
-}, { timestamps: true });
+}, { timestamps: true, strict: false });
 
 // ─── Bot Settings Schema ─────────────────────────────────────────────────
 const botSettingsSchema = new mongoose.Schema({

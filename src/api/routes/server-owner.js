@@ -298,35 +298,39 @@ router.post('/protection', (req, res) => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
-// إعدادات الترحيب (Welcome Settings)
+// إعدادات الترحيب — قراءة فقط (الكتابة تتم من Bot Owner Dashboard)
 // ──────────────────────────────────────────────────────────────────────────────
-router.get('/welcome-settings', (req, res) => {
+
+/**
+ * GET /server/:guildId/welcome-settings
+ * يُرجع إعدادات الترحيب الحالية لهذا السيرفر (للعرض فقط).
+ */
+router.get('/welcome-settings', async (req, res) => {
     const { guildId } = req.params;
     const guildData = db.getGuildData(guildId);
-    
+
+    let channelName = null;
+    let channelValid = false;
+    const client = req.app.get('client');
+    if (guildData.welcomeChannel && client) {
+        try {
+            const ch = await client.channels.fetch(guildData.welcomeChannel).catch(() => null);
+            if (ch && ch.guildId === guildId) { channelName = ch.name; channelValid = true; }
+        } catch {}
+    }
+
     res.json({
         success: true,
-        welcomeImage: guildData.welcomeImage,
-        welcomeAvatarX: guildData.welcomeAvatarX,
-        welcomeAvatarY: guildData.welcomeAvatarY,
-        welcomeAvatarSize: guildData.welcomeAvatarSize,
-        welcomeAvatarRadius: guildData.welcomeAvatarRadius,
+        welcomeEnabled:      guildData.welcomeEnabled  ?? false,
+        welcomeChannel:      guildData.welcomeChannel  ?? null,
+        welcomeChannelName:  channelName,
+        welcomeChannelValid: channelValid,
+        welcomeImage:        guildData.welcomeImage    ?? null,
+        welcomeAvatarX:      guildData.welcomeAvatarX  ?? 960,
+        welcomeAvatarY:      guildData.welcomeAvatarY  ?? 540,
+        welcomeAvatarSize:   guildData.welcomeAvatarSize ?? 256,
+        welcomeAvatarRadius: guildData.welcomeAvatarRadius ?? 50,
     });
-});
-
-router.post('/welcome-settings', (req, res) => {
-    const { guildId } = req.params;
-    const { welcomeImage, welcomeAvatarX, welcomeAvatarY, welcomeAvatarSize, welcomeAvatarRadius } = req.body;
-    
-    db.updateGuildData(guildId, {
-        welcomeImage: welcomeImage || null,
-        welcomeAvatarX: welcomeAvatarX || 0,
-        welcomeAvatarY: welcomeAvatarY || 0,
-        welcomeAvatarSize: welcomeAvatarSize || 128,
-        welcomeAvatarRadius: welcomeAvatarRadius || 50,
-    });
-    
-    res.json({ success: true, message: 'تم حفظ إعدادات الترحيب بنجاح' });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────

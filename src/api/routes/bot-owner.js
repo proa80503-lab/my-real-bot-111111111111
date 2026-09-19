@@ -143,7 +143,7 @@ router.post('/settings', (req, res) => {
         'challengeInterval', 'moodMessageInterval', 'aiRandomReplyFrequency',
         'aiRandomReplyEnabled', 'dailyReminderEnabled', 'dailySummaryEnabled',
         'antiRaidAccountAgeEnabled',
-        'welcomeGuildId', 'welcomeChannelId',
+        'welcomeGuildId', 'welcomeChannelId', 'welcomeEnabled',
         'welcomeImage', 'welcomeAvatarX',
         'welcomeAvatarY', 'welcomeAvatarWidth', 'welcomeAvatarHeight', 'welcomeAvatarRadius',
         'savedWelcomeDesigns'
@@ -161,8 +161,42 @@ router.post('/settings', (req, res) => {
         } catch {}
     }
 
+    // ── CORE FIX: مزامنة إعدادات الترحيب مع Guild DB ─────────────────────────
+    // welcome.js يقرأ من Guild DB فقط — لذا يجب الكتابة هنا
+    const targetGuildId = body.welcomeGuildId || botSettings.get('welcomeGuildId');
+    if (targetGuildId && (body.welcomeChannelId !== undefined || body.welcomeEnabled !== undefined || body.welcomeGuildId !== undefined)) {
+        const guildUpdates = {};
+
+        // إذا تغيّر الـ Guild، احذف الإعداد من الـ Guild القديم أولاً
+        const oldGuildId = botSettings.get('welcomeGuildId');
+        if (body.welcomeGuildId && oldGuildId && oldGuildId !== body.welcomeGuildId) {
+            db.updateGuildData(oldGuildId, { welcomeEnabled: false, welcomeChannel: null });
+            console.log(`[BotOwner/Settings] ⚠️ تم مسح إعدادات الترحيب من Guild القديم: ${oldGuildId}`);
+        }
+
+        // احفظ الإعدادات الجديدة في الـ Guild المستهدف
+        if (body.welcomeChannelId !== undefined) guildUpdates.welcomeChannel = body.welcomeChannelId || null;
+        if (body.welcomeEnabled   !== undefined) guildUpdates.welcomeEnabled = Boolean(body.welcomeEnabled);
+        if (body.welcomeImage     !== undefined) guildUpdates.welcomeImage   = body.welcomeImage   || null;
+        if (body.welcomeAvatarX   !== undefined) guildUpdates.welcomeAvatarX = Number(body.welcomeAvatarX) || 960;
+        if (body.welcomeAvatarY   !== undefined) guildUpdates.welcomeAvatarY = Number(body.welcomeAvatarY) || 540;
+        if (body.welcomeAvatarWidth  !== undefined) guildUpdates.welcomeAvatarSize   = Number(body.welcomeAvatarWidth)  || 256;
+        if (body.welcomeAvatarHeight !== undefined) guildUpdates.welcomeAvatarSize   = Number(body.welcomeAvatarHeight) || 256;
+        if (body.welcomeAvatarRadius !== undefined) guildUpdates.welcomeAvatarRadius = Number(body.welcomeAvatarRadius) || 50;
+
+        if (Object.keys(guildUpdates).length > 0) {
+            db.updateGuildData(targetGuildId, guildUpdates);
+            console.log(
+                `[BotOwner/Settings] ✅ تم مزامنة إعدادات الترحيب مع Guild DB\n` +
+                `  → Guild: ${targetGuildId}\n` +
+                `  → Updates: ${JSON.stringify(guildUpdates)}`
+            );
+        }
+    }
+
     res.json({ success: true });
 });
+
 
 // ──────────────────────────────────────────────────────────────────────────────
 // إدارة الاقتصاد
