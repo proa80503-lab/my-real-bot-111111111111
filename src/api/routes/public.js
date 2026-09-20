@@ -7,15 +7,14 @@
 
 const express = require('express');
 const config = require('../../../config');
-const db = require('../../../utils/database');
-const mongoDb = require('../../../src/database/db'); // للوصول المباشر لقاعدة البيانات
+const db = require('../../../src/database/db');
 const { verifyToken } = require('./auth');
 const router = express.Router();
 
 // ─── عرض صورة الترحيب المرفوعة محلياً (من MongoDB) ──────────────────────────
 router.get('/welcome-image/:guildId', async (req, res) => {
     try {
-        const base64Str = await mongoDb.getWelcomeImageBase64(req.params.guildId);
+        const base64Str = await db.getWelcomeImageBase64(req.params.guildId);
         if (!base64Str) {
             return res.status(404).send('Image not found');
         }

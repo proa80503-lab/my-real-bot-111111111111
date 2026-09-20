@@ -1,6 +1,6 @@
 const express = require('express');
+const db = require('../../../src/database/db');
 const { verifyToken } = require('./auth');
-const db = require('../../../utils/database');
 const fs = require('fs');
 const path = require('path');
 const router = express.Router();

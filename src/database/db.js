@@ -269,8 +269,9 @@ function getLeaderboard(field = 'balance', limit = 10) {
 function resetAllBanks() {
     for (const user of cache.users.values()) {
         user.bank = 0;
+        user.inventory = [];
     }
-    User.updateMany({}, { $set: { bank: 0 } }).catch(e => console.error(e));
+    User.updateMany({}, { $set: { bank: 0, inventory: [] } }).catch(e => console.error(e));
 }
 
 function saveAll() {}

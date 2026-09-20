@@ -1,8 +1,8 @@
 const express = require('express');
 const { verifyToken } = require('./auth');
 const dConf = require('../../../utils/dashboard-config');
-const botSettings = require('../../../utils/bot-settings');
-const db = require('../../../utils/database');
+const botSettings = require('../../../src/database/bot-settings-db');
+const db = require('../../../src/database/db');
 const router = express.Router();
 
 // Apply auth middleware to all control routes
