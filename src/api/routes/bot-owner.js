@@ -166,8 +166,15 @@ router.post('/settings', (req, res) => {
             db.updateGuildData(oldGuildId, { welcomeEnabled: false, welcomeChannel: null });
         }
 
-        if (body.welcomeChannelId !== undefined) guildUpdates.welcomeChannel = body.welcomeChannelId || null;
-        if (body.welcomeEnabled   !== undefined) guildUpdates.welcomeEnabled = Boolean(body.welcomeEnabled);
+        if (body.welcomeChannelId !== undefined) {
+            guildUpdates.welcomeChannel = body.welcomeChannelId || null;
+            if (body.welcomeChannelId) {
+                guildUpdates.welcomeEnabled = true; // تفعيل تلقائي عند اختيار قناة
+            } else {
+                guildUpdates.welcomeEnabled = false; // تعطيل إذا أزال القناة
+            }
+        }
+        if (body.welcomeEnabled !== undefined) guildUpdates.welcomeEnabled = Boolean(body.welcomeEnabled);
         if (body.welcomeAvatarX   !== undefined) guildUpdates.welcomeAvatarX = Number(body.welcomeAvatarX) || 960;
         if (body.welcomeAvatarY   !== undefined) guildUpdates.welcomeAvatarY = Number(body.welcomeAvatarY) || 540;
         if (body.welcomeAvatarWidth  !== undefined) guildUpdates.welcomeAvatarSize = Number(body.welcomeAvatarWidth) || 256;
