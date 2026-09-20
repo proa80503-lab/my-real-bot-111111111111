@@ -21,7 +21,13 @@ export async function apiFetch(path, options = {}) {
     window.location.href = '/'
     return null
   }
-  return res.json()
+  
+  try {
+    return await res.json()
+  } catch (err) {
+    console.error('API Fetch Parse Error:', err)
+    return { success: false, error: `Server returned error ${res.status}: ${res.statusText}` }
+  }
 }
 
 // ─── Auth Provider ─────────────────────────────────────────────────────────────
