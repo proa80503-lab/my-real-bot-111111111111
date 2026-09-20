@@ -141,10 +141,17 @@ const clanSchema = new mongoose.Schema({
     }]
 }, { timestamps: true });
 
+// ─── WelcomeImage Schema (لتخزين صور الترحيب) ────────────────────────────────
+const welcomeImageSchema = new mongoose.Schema({
+    guildId: { type: String, required: true, unique: true },
+    imageBase64: { type: String, required: true }
+}, { timestamps: true });
+
 module.exports = {
     User: mongoose.model('User', userSchema),
     Guild: mongoose.model('Guild', guildSchema),
     BotSetting: mongoose.model('BotSetting', botSettingsSchema),
     WebSession: mongoose.model('WebSession', webSessionSchema),
-    Clan: mongoose.model('Clan', clanSchema)
+    Clan: mongoose.model('Clan', clanSchema),
+    WelcomeImage: mongoose.model('WelcomeImage', welcomeImageSchema)
 };

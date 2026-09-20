@@ -174,30 +174,21 @@ router.post('/settings', (req, res) => {
         if (body.welcomeAvatarHeight !== undefined) guildUpdates.welcomeAvatarSize = Number(body.welcomeAvatarHeight) || 256;
         if (body.welcomeAvatarRadius !== undefined) guildUpdates.welcomeAvatarRadius = Number(body.welcomeAvatarRadius) || 50;
 
-        const fs = require('fs');
-        const path = require('path');
-        const uploadsDir = path.join(process.cwd(), 'data', 'uploads');
-
         if (body.deleteWelcomeImage) {
             botSettings.set('welcomeImage', null);
             guildUpdates.welcomeImage = null;
-            const oldPath = path.join(uploadsDir, `welcome_bg_${targetGuildId}.png`);
-            if (fs.existsSync(oldPath)) {
-                try { fs.unlinkSync(oldPath); } catch(e) { console.error('Failed to delete old image', e); }
-            }
+            db.deleteWelcomeImageBase64(targetGuildId).catch(console.error);
         } else if (body.welcomeImageBase64) {
             try {
-                if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-                const base64Data = body.welcomeImageBase64.replace(/^data:image\/\w+;base64,/, '');
-                const buffer = Buffer.from(base64Data, 'base64');
-                const fileName = `welcome_bg_${targetGuildId}.png`;
-                fs.writeFileSync(path.join(uploadsDir, fileName), buffer);
+                // حفظ الصورة في Mongoose
+                db.setWelcomeImageBase64(targetGuildId, body.welcomeImageBase64).catch(console.error);
                 
-                const localUrl = `/uploads/${fileName}`;
-                botSettings.set('welcomeImage', localUrl);
-                guildUpdates.welcomeImage = localUrl;
+                // الرابط الديناميكي الجديد
+                const dynamicUrl = `/api/public/welcome-image/${targetGuildId}`;
+                botSettings.set('welcomeImage', dynamicUrl);
+                guildUpdates.welcomeImage = dynamicUrl;
             } catch (uploadErr) {
-                console.error('[BotOwner/Settings] فشل حفظ الصورة المرفوعة:', uploadErr);
+                console.error('[BotOwner/Settings] فشل حفظ الصورة المرفوعة في القاعدة:', uploadErr);
             }
         } else if (body.welcomeImage !== undefined) {
             guildUpdates.welcomeImage = body.welcomeImage || null;

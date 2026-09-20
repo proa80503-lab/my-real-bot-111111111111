@@ -353,25 +353,13 @@ router.post('/welcome-settings', async (req, res) => {
     if (welcomeAvatarSize !== undefined) updates.welcomeAvatarSize = Number(welcomeAvatarSize) || 256;
     if (welcomeAvatarRadius !== undefined) updates.welcomeAvatarRadius = Number(welcomeAvatarRadius) || 50;
 
-    const fs = require('fs');
-    const path = require('path');
-    const uploadsDir = path.join(process.cwd(), 'data', 'uploads');
-
     if (req.body.deleteWelcomeImage) {
         updates.welcomeImage = null;
-        const oldPath = path.join(uploadsDir, `welcome_bg_${guildId}.png`);
-        if (fs.existsSync(oldPath)) {
-            try { fs.unlinkSync(oldPath); } catch(e) { console.error('Failed to delete old image', e); }
-        }
+        db.deleteWelcomeImageBase64(guildId).catch(console.error);
     } else if (req.body.welcomeImageBase64) {
         try {
-            if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-            const base64Data = req.body.welcomeImageBase64.replace(/^data:image\/\w+;base64,/, '');
-            const buffer = Buffer.from(base64Data, 'base64');
-            const fileName = `welcome_bg_${guildId}.png`;
-            fs.writeFileSync(path.join(uploadsDir, fileName), buffer);
-            
-            updates.welcomeImage = `/uploads/${fileName}`;
+            db.setWelcomeImageBase64(guildId, req.body.welcomeImageBase64).catch(console.error);
+            updates.welcomeImage = `/api/public/welcome-image/${guildId}`;
         } catch (uploadErr) {
             console.error('[ServerOwner/Welcome] فشل حفظ الصورة المرفوعة:', uploadErr);
         }

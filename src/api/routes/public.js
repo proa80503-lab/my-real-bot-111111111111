@@ -8,8 +8,33 @@
 const express = require('express');
 const config = require('../../../config');
 const db = require('../../../utils/database');
+const mongoDb = require('../../../src/database/db'); // للوصول المباشر لقاعدة البيانات
 const { verifyToken } = require('./auth');
 const router = express.Router();
+
+// ─── عرض صورة الترحيب المرفوعة محلياً (من MongoDB) ──────────────────────────
+router.get('/welcome-image/:guildId', async (req, res) => {
+    try {
+        const base64Str = await mongoDb.getWelcomeImageBase64(req.params.guildId);
+        if (!base64Str) {
+            return res.status(404).send('Image not found');
+        }
+        
+        const match = base64Str.match(/^data:image\/(\w+);base64,/);
+        const mimeType = match ? `image/${match[1]}` : 'image/png';
+        const base64Data = base64Str.replace(/^data:image\/\w+;base64,/, '');
+        
+        const imgBuffer = Buffer.from(base64Data, 'base64');
+        res.writeHead(200, {
+            'Content-Type': mimeType,
+            'Content-Length': imgBuffer.length
+        });
+        res.end(imgBuffer);
+    } catch (err) {
+        console.error('[Public/WelcomeImage]', err);
+        res.status(500).send('Internal Server Error');
+    }
+});
 
 // ─── قفل العمليات لمنع التدبيل ────────────────────────────────────────────────
 const activePurchases = new Set();

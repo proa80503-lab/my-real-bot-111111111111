@@ -28,13 +28,23 @@ const REQUIRED_PERMS_EMBED = [
 
 // ── جلب صورة كـ Buffer ────────────────────────────────────────────────────────
 async function fetchImageBuffer(url) {
-    if (url.startsWith('/uploads/')) {
+    if (url.startsWith('/api/public/welcome-image/')) {
+        const guildId = url.split('/').pop();
+        const db = require('../src/database/db');
+        const base64Str = await db.getWelcomeImageBase64(guildId);
+        if (base64Str) {
+            const base64Data = base64Str.replace(/^data:image\/\w+;base64,/, '');
+            return Buffer.from(base64Data, 'base64');
+        }
+        throw new Error('لم يتم العثور على الصورة المرفوعة في قاعدة البيانات');
+    } else if (url.startsWith('/uploads/')) {
+        // دعم مؤقت للصور المرفوعة مسبقاً قبل التحديث لمنع تعطلها
         const fs = require('fs');
         const path = require('path');
-        // مسار الصورة المحلي نسبة لمجلد التشغيل
         const localPath = path.join(process.cwd(), 'data', url);
         return fs.promises.readFile(localPath);
     }
+    
     const res = await fetch(url, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
         signal: AbortSignal.timeout(10_000),

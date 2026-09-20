@@ -1,6 +1,6 @@
 'use strict';
 
-const { User, Guild, Clan, WebSession, BotSetting } = require('./models');
+const { User, Guild, Clan, WebSession, BotSetting, WelcomeImage } = require('./models');
 
 // ─── Cache System (In-Memory) ────────────────────────────────────────────────
 // لتجنب تعديل 50+ ملف يستخدم `getUserData` بشكل متزامن، نُخزن البيانات في الذاكرة.
@@ -276,6 +276,24 @@ function resetAllBanks() {
 function saveAll() {}
 function saveDatabase() {}
 
+// ─── Welcome Images ─────────────────────────────────────────────────────────
+async function getWelcomeImageBase64(guildId) {
+    const doc = await WelcomeImage.findOne({ guildId }).lean();
+    return doc ? doc.imageBase64 : null;
+}
+
+async function setWelcomeImageBase64(guildId, imageBase64) {
+    await WelcomeImage.updateOne(
+        { guildId },
+        { $set: { imageBase64 } },
+        { upsert: true }
+    );
+}
+
+async function deleteWelcomeImageBase64(guildId) {
+    await WelcomeImage.deleteOne({ guildId });
+}
+
 // ─── Exports ──────────────────────────────────────────────────────────────
 module.exports = {
     LIMITS, loadDatabase,
@@ -283,5 +301,6 @@ module.exports = {
     addMoney, removeMoney, addMoneyToBank, removeMoneyFromBank, transferMoney, addTransaction,
     getGuildData, updateGuildData,
     getAllUsers, getAllGuilds, getLeaderboard, resetAllBanks, saveAll, saveDatabase,
-    createWebSession, getWebSession, deleteWebSession, cleanExpiredSessions
+    createWebSession, getWebSession, deleteWebSession, cleanExpiredSessions,
+    getWelcomeImageBase64, setWelcomeImageBase64, deleteWelcomeImageBase64
 };
