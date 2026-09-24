@@ -376,6 +376,11 @@ async function _handleButton(interaction) {
         return _require('../commands/moderation/panel')?.handleAdminInteraction(interaction);
     }
 
+    // Advanced Admin Panel
+    if (id.startsWith('adv_')) {
+        return _require('../commands/moderation/admin-advanced')?.handleInteraction(interaction);
+    }
+
     // Profile — يُدار بـ collector، إذا وصل هنا الجلسة انتهت
     if (id.startsWith('prof_')) {
         if (!interaction.replied && !interaction.deferred) {

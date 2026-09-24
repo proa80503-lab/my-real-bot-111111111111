@@ -43,6 +43,15 @@ async function startBot() {
         await botSettingsDb.loadBotSettings();
         
         console.log('[Startup] ✅ Database and caches loaded successfully.');
+
+        // ─── تنظيف ملفات JSON القديمة (مرّة واحدة) ───────────────────────────
+        try {
+            const cleanup = require('./utils/startup-cleanup');
+            cleanup.cleanupLegacyFiles();
+            cleanup.auditLegacyUsage();
+        } catch (err) {
+            console.warn('[Startup] ⚠️ Cleanup skipped:', err.message);
+        }
     } catch (err) {
         console.error('[Startup] ❌ Database initialization failed:', err.message);
         process.exit(1);

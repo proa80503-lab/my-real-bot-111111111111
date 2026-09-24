@@ -3,6 +3,31 @@ const db = require('./database');
 const config = require('../config');
 const channelResolver = require('./channel-resolver');
 
+// ─── استثناء البوت من السجلات ───────────────────────────────────────────────
+// لا يجب أن يُسجَّل البوت كـ executor لمخالفة في سجلات الحماية
+// هذا يمنع "البوت يرى نفسه مخالفاً" عند تنفيذ أوامر مثل حذف رسالة سبام
+
+let _botId = null;
+
+/**
+ * تعيين معرف البوت (يُستدعى مرة واحدة عند بدء التشغيل من ready.js)
+ */
+function setBotId(id) {
+    _botId = id;
+}
+
+/**
+ * فحص ما إذا كان الـ executor هو البوت نفسه
+ * @param {import('discord.js').User|null} executor
+ * @returns {boolean}
+ */
+function _isBotAction(executor) {
+    if (!executor) return false;
+    if (_botId && executor.id === _botId) return true;
+    if (executor.bot === true) return true;
+    return false;
+}
+
 // ─── إرسال Log إلى قناة السجلات ───────────────────────────────────────────────
 async function sendLog(guild, embed) {
     if (!guild) return;
@@ -120,9 +145,14 @@ async function logVoiceState(oldState, newState) {
 async function logMessageDelete(message) {
     if (!message.author) return;
     if (!message.guild) return;
+    // ✅ تجاهل الرسائل التي حذفها البوت نفسه (مكافحة سبام، كلام رديء، إلخ)
+    if (message.author.bot) return;
 
     // في حالة حذف الرسالة، الـ target في الـ Audit Log هو صاحب الرسالة
     const executor = await getExecutor(message.guild, AuditLogEvent.MessageDelete, message.author.id);
+
+    // ✅ إذا كان الـ executor هو البوت نفسه → هذا إجراء حماية مقصود، لا نُسجله
+    if (_isBotAction(executor)) return;
 
     const safeContent = message.content
         ? (message.content.length > 1024 ? message.content.substring(0, 1020) + '...' : message.content)
@@ -134,7 +164,6 @@ async function logMessageDelete(message) {
         .setDescription(`**القناة:** ${message.channel}\n**المؤلف:** ${message.author}`)
         .addFields(
             { name: 'المحتوى', value: safeContent },
-            // إذا لم نجد executor (بسبب الوقت أو عدم التطابق)، فغالباً المستخدم حذفها بنفسه
             { name: 'المحذوف بواسطة', value: executor ? `${executor}` : `${message.author} (بنفسه)` }
         )
         .setTimestamp()
@@ -151,6 +180,8 @@ async function logMessageDelete(message) {
 async function logMessageUpdate(oldMessage, newMessage) {
     if (!newMessage.guild) return;
     if (oldMessage.content === newMessage.content) return;
+    // ✅ تجاهل تعديلات البوت على رسائله (embeds، إلخ)
+    if (newMessage.author?.bot) return;
 
     const safeOldContent = oldMessage.content
         ? (oldMessage.content.length > 1024 ? oldMessage.content.substring(0, 1020) + '...' : oldMessage.content)
@@ -499,7 +530,7 @@ async function logRoleUpdate(oldRole, newRole) {
 }
 
 module.exports = {
-    sendLog,
+    sendLog, setBotId,
     logMessageDelete,
     logMessageUpdate,
     logMemberJoin,
@@ -518,3 +549,4 @@ module.exports = {
     logChannelUpdate,
     logRoleUpdate
 };
+

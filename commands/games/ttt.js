@@ -103,32 +103,73 @@ function buildGameEmbed(game, status = null) {
         .setTimestamp();
 }
 
-// ─── خطوة البوت (AI بسيط) ────────────────────────────────────────────────────
-function getBotMove(board) {
-    // 1. هل يمكن للبوت الفوز؟
-    for (const [a,b,c] of WIN_LINES) {
-        const line = [board[a], board[b], board[c]];
-        if (line.filter(x => x === 'O').length === 2 && line.includes(null)) {
-            const idx = [a,b,c][line.indexOf(null)];
-            return idx;
+// ─── Minimax AI للبوت (لا يُهزَم!) ──────────────────────────────────────────
+function _minimax(board, isMaximizing, depth = 0) {
+    const result = checkWinner(board);
+    if (result?.winner === 'O') return  10 - depth;
+    if (result?.winner === 'X') return -10 + depth;
+    const empty = board.filter(v => !v);
+    if (empty.length === 0) return 0;
+
+    if (isMaximizing) {
+        let best = -Infinity;
+        for (let i = 0; i < 9; i++) {
+            if (board[i]) continue;
+            board[i] = 'O';
+            best = Math.max(best, _minimax(board, false, depth + 1));
+            board[i] = null;
         }
-    }
-    // 2. هل يجب إيقاف اللاعب؟
-    for (const [a,b,c] of WIN_LINES) {
-        const line = [board[a], board[b], board[c]];
-        if (line.filter(x => x === 'X').length === 2 && line.includes(null)) {
-            const idx = [a,b,c][line.indexOf(null)];
-            return idx;
+        return best;
+    } else {
+        let best = Infinity;
+        for (let i = 0; i < 9; i++) {
+            if (board[i]) continue;
+            board[i] = 'X';
+            best = Math.min(best, _minimax(board, true, depth + 1));
+            board[i] = null;
         }
+        return best;
     }
-    // 3. المركز
-    if (!board[4]) return 4;
-    // 4. الزوايا
-    const corners = [0,2,6,8].filter(i => !board[i]);
-    if (corners.length) return corners[Math.floor(Math.random() * corners.length)];
-    // 5. أي خلية فارغة
-    const empty = board.map((v,i) => v ? null : i).filter(i => i !== null);
-    return empty[Math.floor(Math.random() * empty.length)];
+}
+
+function getBotMove(board, difficulty = 'hard') {
+    // صعوبة سهلة: يختار عشوائياً أحياناً
+    if (difficulty === 'easy') {
+        const empty = board.map((v,i) => v ? null : i).filter(i => i !== null);
+        if (Math.random() < 0.6) return empty[Math.floor(Math.random() * empty.length)];
+    }
+    // صعوبة متوسطة: يستخدم الاستراتيجية الأساسية
+    if (difficulty === 'medium') {
+        // 1. فوز مباشر؟
+        for (const [a,b,c] of WIN_LINES) {
+            const line = [board[a], board[b], board[c]];
+            if (line.filter(x => x === 'O').length === 2 && line.includes(null)) {
+                return [a,b,c][line.indexOf(null)];
+            }
+        }
+        // 2. إيقاف الخصم؟
+        for (const [a,b,c] of WIN_LINES) {
+            const line = [board[a], board[b], board[c]];
+            if (line.filter(x => x === 'X').length === 2 && line.includes(null)) {
+                return [a,b,c][line.indexOf(null)];
+            }
+        }
+        if (!board[4]) return 4;
+        const empty = board.map((v,i) => v ? null : i).filter(i => i !== null);
+        return empty[Math.floor(Math.random() * empty.length)];
+    }
+
+    // صعوبة صعبة (افتراضي): Minimax كامل — لا يُهزَم
+    let bestVal = -Infinity;
+    let bestMove = -1;
+    for (let i = 0; i < 9; i++) {
+        if (board[i]) continue;
+        board[i] = 'O';
+        const val = _minimax(board, false);
+        board[i] = null;
+        if (val > bestVal) { bestVal = val; bestMove = i; }
+    }
+    return bestMove;
 }
 
 // ─── تحديث رسالة اللعبة ──────────────────────────────────────────────────────

@@ -1,347 +1,255 @@
-const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-const { PremiumEmbedBuilder } = require('../../utils/embed-builder');
-const { isOwner, hasPermOrOwner } = require('../../utils/permissions');
+'use strict';
 
-// ============================
-// أوامر إدارية متقدمة
-// ============================
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║  🔧 ADMIN ADVANCED v2.0 — لوحة الإدارة المتقدمة للمالك               ║
+ * ║  يُفعَّل بـ: !إدارة-متقدمة | !admin-panel                             ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
 
-// 1. Mass Actions - إجراءات جماعية
-async function massKick(message, args) {
-    if (!hasPermOrOwner(message.member, PermissionFlagsBits.KickMembers)) {
-        return message.reply('❌ ليس لديك صلاحية!');
-    }
+const {
+    EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
+    PermissionFlagsBits
+} = require('discord.js');
+const config      = require('../../config');
+const db          = require('../../utils/database');
+const botSettings = require('../../utils/bot-settings');
 
-    const role = message.mentions.roles.first();
-    if (!role) {
-        return message.reply('❌ منشن الرتبة!');
-    }
+const C = {
+    gold:   '#FFD700',
+    red:    '#E74C3C',
+    green:  '#2ECC71',
+    blue:   '#3498DB',
+    purple: '#9B59B6',
+    dark:   '#2C3E50',
+    orange: '#FF8C00',
+};
 
-    const members = role.members;
-    let kicked = 0;
+// ─── بناء لوحة التحكم الرئيسية ──────────────────────────────────────────────
+function buildMainPanel(guild, client) {
+    const guildData  = db.getGuildData(guild?.id || '0');
+    const allUsers   = db.getAllUsers();
+    const userCount  = Object.keys(allUsers).length;
+    const settings   = botSettings.getAll();
+    const cmdCount   = client?.commands?.size ?? '?';
 
-    for (const [id, member] of members) {
-        try {
-            await member.kick('Mass kick');
-            kicked++;
-        } catch (error) { }
-    }
+    const embed = new EmbedBuilder()
+        .setColor(C.purple)
+        .setTitle('🔧 لوحة الإدارة المتقدمة')
+        .setDescription([
+            '```ansi',
+            '\u001b[1;35m═══════════════════════════════════════\u001b[0m',
+            '\u001b[1;33m  نظام الإدارة المتقدم — الجيل القادم  \u001b[0m',
+            '\u001b[1;35m═══════════════════════════════════════\u001b[0m',
+            '```',
+        ].join('\n'))
+        .addFields(
+            {
+                name: '🤖 إحصائيات البوت',
+                value: [
+                    `> 📊 **الأوامر:** ${cmdCount}`,
+                    `> 🌐 **السيرفرات:** ${client?.guilds?.cache?.size ?? '?'}`,
+                    `> 👥 **المستخدمون:** ${userCount}`,
+                    `> 🏓 **Ping:** ${client?.ws?.ping ?? '?'}ms`,
+                ].join('\n'),
+                inline: true,
+            },
+            {
+                name: '⚙️ الإعدادات النشطة',
+                value: [
+                    `> 🤖 AI: ${settings.aiRandomReplyEnabled ? '✅' : '❌'}`,
+                    `> 📢 رسائل تلقائية: ${settings.autoMessagesEnabled ? '✅' : '❌'}`,
+                    `> 👻 Ghost Ping: ${settings.ghostPingEnabled ? '✅' : '❌'}`,
+                    `> 🛡️ Anti-Raid: ${guildData.antiRaidEnabled ? '✅' : '❌'}`,
+                ].join('\n'),
+                inline: true,
+            },
+            {
+                name: '💾 حالة التخزين',
+                value: [
+                    `> 🗄️ **MongoDB:** ✅ متصل`,
+                    `> 🧠 **Cache:** ✅ نشط`,
+                    `> 📁 **JSON قديم:** محذوف`,
+                ].join('\n'),
+                inline: true,
+            },
+        )
+        .setTimestamp()
+        .setFooter({ text: '🔧 لوحة الإدارة المتقدمة | للمالك فقط' });
 
-    return message.reply(`✅ تم طرد ${kicked} عضو من رتبة ${role.name}`);
-}
-
-async function massBan(message, args) {
-    if (!hasPermOrOwner(message.member, PermissionFlagsBits.BanMembers)) {
-        return message.reply('❌ ليس لديك صلاحية!');
-    }
-
-    const role = message.mentions.roles.first();
-    if (!role) {
-        return message.reply('❌ منشن الرتبة!');
-    }
-
-    const members = role.members;
-    let banned = 0;
-
-    for (const [id, member] of members) {
-        try {
-            await member.ban({ reason: 'Mass ban' });
-            banned++;
-        } catch (error) { }
-    }
-
-    return message.reply(`✅ تم حظر ${banned} عضو من رتبة ${role.name}`);
-}
-
-// 2. Warning System - نظام تحذيرات
-const warnings = new Map();
-
-async function warn(message, args) {
-    if (!hasPermOrOwner(message.member, PermissionFlagsBits.ModerateMembers)) {
-        return message.reply('❌ ليس لديك صلاحية!');
-    }
-
-    const user = message.mentions.users.first();
-    const reason = args.slice(1).join(' ') || 'لا يوجد سبب';
-
-    if (!user) {
-        return message.reply('❌ منشن العضو!');
-    }
-
-    const guildId = message.guild.id;
-    const key = `${guildId}-${user.id}`;
-
-    if (!warnings.has(key)) {
-        warnings.set(key, []);
-    }
-
-    warnings.get(key).push({
-        reason,
-        moderator: message.author.id,
-        timestamp: Date.now()
-    });
-
-    const warnCount = warnings.get(key).length;
-
-    const embed = PremiumEmbedBuilder.warning(
-        '⚠️ تحذير',
-        `${user} حصل على تحذير #${warnCount}`,
-        [
-            { name: 'السبب', value: reason },
-            { name: 'المشرف', value: `${message.author}` }
-        ]
+    const row1 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('adv_bot_info').setLabel('📊 معلومات البوت').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('adv_clear_cache').setLabel('🔄 تحديث Cache').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('adv_storage_audit').setLabel('💾 مراجعة التخزين').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('adv_reset_cooldowns').setLabel('⏰ إعادة Cooldowns').setStyle(ButtonStyle.Danger),
     );
 
-    // إجراءات تلقائية
-    const member = message.guild.members.cache.get(user.id);
-    if (member) {
-        if (warnCount === 3) {
-            await member.timeout(60 * 60 * 1000, '3 تحذيرات'); // ساعة
-            embed.addFields({ name: '⏱️ إجراء تلقائي', value: 'تم كتم الصوت لمدة ساعة' });
-        } else if (warnCount === 5) {
-            await member.kick('5 تحذيرات');
-            embed.addFields({ name: '👢 إجراء تلقائي', value: 'تم الطرد' });
+    const row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('adv_toggle_ai').setLabel('🤖 تبديل AI').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('adv_toggle_msgs').setLabel('📢 تبديل الرسائل').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('adv_toggle_ghostping').setLabel('👻 Ghost Ping').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('adv_maintenance').setLabel('🔒 وضع الصيانة').setStyle(ButtonStyle.Danger),
+    );
+
+    return { embeds: [embed], components: [row1, row2] };
+}
+
+// ─── معالج التفاعلات ──────────────────────────────────────────────────────────
+async function handleInteraction(interaction) {
+    if (interaction.user.id !== config.ownerId &&
+        !interaction.member?.permissions.has(PermissionFlagsBits.Administrator)) {
+        return interaction.reply({ content: '❌ هذه اللوحة للمالك والإدارة فقط!', ephemeral: true });
+    }
+
+    await interaction.deferUpdate().catch(() => {});
+    const id = interaction.customId;
+
+    if (id === 'adv_bot_info') {
+        const uptime   = process.uptime();
+        const hours    = Math.floor(uptime / 3600);
+        const minutes  = Math.floor((uptime % 3600) / 60);
+        const seconds  = Math.floor(uptime % 60);
+        const memUsage = process.memoryUsage();
+
+        const embed = new EmbedBuilder()
+            .setColor(C.blue)
+            .setTitle('📊 معلومات البوت التفصيلية')
+            .addFields(
+                { name: '⏱️ وقت التشغيل', value: `> ${hours}س ${minutes}د ${seconds}ث`, inline: true },
+                { name: '🧠 RAM', value: `> ${Math.round(memUsage.heapUsed / 1024 / 1024)} MB`, inline: true },
+                { name: '📦 Node.js', value: `> ${process.version}`, inline: true },
+                { name: '🏓 Ping', value: `> ${interaction.client.ws.ping}ms`, inline: true },
+                { name: '🌐 السيرفرات', value: `> ${interaction.client.guilds.cache.size}`, inline: true },
+                { name: '👥 المستخدمون', value: `> ${interaction.client.users.cache.size}`, inline: true },
+            )
+            .setTimestamp();
+        return interaction.editReply({ embeds: [embed], components: [] }).catch(() => {});
+    }
+
+    if (id === 'adv_clear_cache') {
+        // إعادة تحميل البيانات من MongoDB
+        try {
+            const coreDb = require('../../src/database/db');
+            await coreDb.loadDatabase();
+            const botSettingsDb = require('../../src/database/bot-settings-db');
+            await botSettingsDb.loadBotSettings();
+            return interaction.editReply({
+                embeds: [new EmbedBuilder().setColor(C.green).setTitle('✅ تم تحديث Cache').setDescription('> تم إعادة تحميل جميع البيانات من MongoDB')],
+                components: []
+            }).catch(() => {});
+        } catch (err) {
+            return interaction.editReply({
+                embeds: [new EmbedBuilder().setColor(C.red).setTitle('❌ فشل تحديث Cache').setDescription(`> ${err.message}`)],
+                components: []
+            }).catch(() => {});
         }
     }
 
-    return message.reply({ embeds: [embed] });
-}
+    if (id === 'adv_storage_audit') {
+        const fs   = require('fs');
+        const path = require('path');
+        const root = path.join(__dirname, '../..');
+        const dataDir = path.join(root, 'data');
 
-async function warnings_list(message, args) {
-    const user = message.mentions.users.first() || message.author;
-    const key = `${message.guild.id}-${user.id}`;
-
-    const userWarnings = warnings.get(key) || [];
-
-    if (userWarnings.length === 0) {
-        return message.reply(`✅ ${user} ليس لديه تحذيرات!`);
-    }
-
-    const fields = userWarnings.map((w, i) => ({
-        name: `تحذير #${i + 1}`,
-        value: `السبب: ${w.reason}\nالمشرف: <@${w.moderator}>\nالتاريخ: <t:${Math.floor(w.timestamp / 1000)}:R>`,
-        inline: false
-    }));
-
-    const embed = PremiumEmbedBuilder.warning(
-        `⚠️ تحذيرات ${user.username}`,
-        `إجمالي: ${userWarnings.length}`,
-        fields
-    );
-
-    return message.reply({ embeds: [embed] });
-}
-
-// 3. Slowmode Control
-async function slowmode(message, args) {
-    if (!hasPermOrOwner(message.member, PermissionFlagsBits.ManageChannels)) {
-        return message.reply('❌ ليس لديك صلاحية!');
-    }
-
-    const seconds = parseInt(args[0]);
-
-    if (isNaN(seconds) || seconds < 0 || seconds > 21600) {
-        return message.reply('❌ الوقت يجب أن يكون بين 0 و 21600 ثانية!');
-    }
-
-    await message.channel.setRateLimitPerUser(seconds);
-
-    if (seconds === 0) {
-        return message.reply('✅ تم إيقاف الوضع البطيء!');
-    }
-
-    return message.reply(`✅ تم تفعيل الوضع البطيء: رسالة كل ${seconds} ثانية`);
-}
-
-// 4. Lock/Unlock Channels
-async function lock(message) {
-    if (!hasPermOrOwner(message.member, PermissionFlagsBits.ManageChannels)) {
-        return message.reply('❌ ليس لديك صلاحية!');
-    }
-
-    await message.channel.permissionOverwrites.edit(message.guild.id, {
-        SendMessages: false
-    });
-
-    return message.reply('🔒 تم قفل القناة!');
-}
-
-async function unlock(message) {
-    if (!hasPermOrOwner(message.member, PermissionFlagsBits.ManageChannels)) {
-        return message.reply('❌ ليس لديك صلاحية!');
-    }
-
-    await message.channel.permissionOverwrites.edit(message.guild.id, {
-        SendMessages: null
-    });
-
-    return message.reply('🔓 تم فتح القناة!');
-}
-
-// 5. Purge Messages
-async function purge(message, args) {
-    if (!hasPermOrOwner(message.member, PermissionFlagsBits.ManageMessages)) {
-        return message.reply('❌ ليس لديك صلاحية!');
-    }
-
-    const amount = parseInt(args[0]);
-
-    if (!amount || amount < 1 || amount > 100) {
-        return message.reply('❌ العدد يجب أن يكون بين 1 و 100!');
-    }
-
-    const deleted = await message.channel.bulkDelete(amount + 1, true);
-
-    const reply = await message.channel.send(`✅ تم حذف ${deleted.size - 1} رسالة`);
-    setTimeout(() => reply.delete(), 3000);
-}
-
-// 6. Role Management
-async function roleAll(message, args) {
-    if (!hasPermOrOwner(message.member, PermissionFlagsBits.ManageRoles)) {
-        return message.reply('❌ ليس لديك صلاحية!');
-    }
-
-    const role = message.mentions.roles.first();
-    if (!role) {
-        return message.reply('❌ منشن الرتبة!');
-    }
-
-    // Security Check: Hierarchy (صاحب البوت يتخطى هذا)
-    if (!isOwner(message.author.id) && message.member.roles.highest.position <= role.position) {
-        return message.reply('❌ لا يمكنك إدارة رتبة أعلى من رتبتك أو مساوية لها!');
-    }
-
-    // Security Check: Protected Roles (صاحب البوت يستطيع إدارتها)
-    if (!isOwner(message.author.id)) {
-        if (role.permissions.has(PermissionFlagsBits.Administrator) || role.name === '👑 Owner' || role.name === '👮 Admin') {
-            return message.reply('❌ لا يمكنك استخدام هذا الأمر على رتب الإدارة العليا!');
-        }
-    }
-
-    const members = await message.guild.members.fetch();
-    let added = 0;
-
-    for (const [id, member] of members) {
-        if (!member.roles.cache.has(role.id)) {
-            try {
-                await member.roles.add(role);
-                added++;
-            } catch (error) { }
-        }
-    }
-
-    return message.reply(`✅ تم إعطاء رتبة ${role.name} لـ ${added} عضو`);
-}
-
-async function removeRoleAll(message, args) {
-    if (!hasPermOrOwner(message.member, PermissionFlagsBits.ManageRoles)) {
-        return message.reply('❌ ليس لديك صلاحية!');
-    }
-
-    const role = message.mentions.roles.first();
-    if (!role) {
-        return message.reply('❌ منشن الرتبة!');
-    }
-
-    const members = role.members;
-    let removed = 0;
-
-    for (const [id, member] of members) {
+        let files = [];
         try {
-            await member.roles.remove(role);
-            removed++;
-        } catch (error) { }
+            files = fs.readdirSync(dataDir).map(f => {
+                const stat = fs.statSync(path.join(dataDir, f));
+                return `> 📁 \`${f}\` — ${(stat.size / 1024).toFixed(1)} KB`;
+            });
+        } catch {
+            files = ['> ❌ لا يمكن قراءة مجلد data/'];
+        }
+
+        return interaction.editReply({
+            embeds: [new EmbedBuilder()
+                .setColor(C.dark)
+                .setTitle('💾 مراجعة ملفات التخزين')
+                .setDescription([
+                    '**ملفات data/ الحالية:**',
+                    ...files.slice(0, 15),
+                    '',
+                    '**التخزين الرئيسي:** 🗄️ MongoDB Atlas',
+                ].join('\n'))
+            ],
+            components: []
+        }).catch(() => {});
     }
 
-    return message.reply(`✅ تم إزالة رتبة ${role.name} من ${removed} عضو`);
-}
-
-// 7. Nickname Management
-async function nickAll(message, args) {
-    if (!hasPermOrOwner(message.member, PermissionFlagsBits.ManageNicknames)) {
-        return message.reply('❌ ليس لديك صلاحية!');
+    if (id === 'adv_toggle_ai') {
+        const current = botSettings.get('aiRandomReplyEnabled');
+        botSettings.set('aiRandomReplyEnabled', !current);
+        return interaction.editReply({
+            embeds: [new EmbedBuilder().setColor(current ? C.red : C.green)
+                .setTitle(`🤖 AI ${current ? 'معطّل' : 'مفعّل'}`)
+                .setDescription(`> الذكاء الاصطناعي الآن: **${current ? '❌ معطّل' : '✅ مفعّل'}**`)
+            ],
+            components: []
+        }).catch(() => {});
     }
 
-    const nickname = args.join(' ');
-    if (!nickname) {
-        return message.reply('❌ اكتب الاسم المستعار!');
+    if (id === 'adv_toggle_msgs') {
+        const current = botSettings.get('autoMessagesEnabled');
+        botSettings.set('autoMessagesEnabled', !current);
+        return interaction.editReply({
+            embeds: [new EmbedBuilder().setColor(current ? C.red : C.green)
+                .setTitle(`📢 الرسائل التلقائية ${current ? 'معطّلة' : 'مفعّلة'}`)
+                .setDescription(`> الرسائل التلقائية الآن: **${current ? '❌ معطّلة' : '✅ مفعّلة'}**`)
+            ],
+            components: []
+        }).catch(() => {});
     }
 
-    const members = await message.guild.members.fetch();
-    let changed = 0;
-
-    for (const [id, member] of members) {
-        try {
-            await member.setNickname(nickname);
-            changed++;
-        } catch (error) { }
+    if (id === 'adv_toggle_ghostping') {
+        const current = botSettings.get('ghostPingEnabled');
+        botSettings.set('ghostPingEnabled', !current);
+        return interaction.editReply({
+            embeds: [new EmbedBuilder().setColor(current ? C.red : C.green)
+                .setTitle(`👻 Ghost Ping ${current ? 'معطّل' : 'مفعّل'}`)
+                .setDescription(`> Ghost Ping الآن: **${current ? '❌ معطّل' : '✅ مفعّل'}**`)
+            ],
+            components: []
+        }).catch(() => {});
     }
 
-    return message.reply(`✅ تم تغيير اسم ${changed} عضو`);
-}
+    if (id === 'adv_maintenance') {
+        const current = botSettings.get('maintenanceMode');
+        botSettings.set('maintenanceMode', !current);
+        return interaction.editReply({
+            embeds: [new EmbedBuilder().setColor(current ? C.green : C.red)
+                .setTitle(`🔒 وضع الصيانة ${current ? 'معطّل' : 'مفعّل'}`)
+                .setDescription(`> وضع الصيانة الآن: **${current ? '❌ معطّل' : '⚠️ مفعّل — البوت لن يستجيب للأوامر العادية'}**`)
+            ],
+            components: []
+        }).catch(() => {});
+    }
 
-// 8. Server Stats
-async function serverStats(message) {
-    const guild = message.guild;
-    const members = await guild.members.fetch();
-
-    const botCount = members.filter(m => m.user.bot).size;
-    const humanCount = members.size - botCount;
-    const onlineCount = members.filter(m => m.presence?.status === 'online').size;
-
-    const embed = PremiumEmbedBuilder.info(
-        `📊 إحصائيات ${guild.name}`,
-        null,
-        [
-            { name: '👥 الأعضاء', value: `${members.size}`, inline: true },
-            { name: '🤖 البوتات', value: `${botCount}`, inline: true },
-            { name: '👤 البشر', value: `${humanCount}`, inline: true },
-            { name: '🟢 المتصلين', value: `${onlineCount}`, inline: true },
-            { name: '📝 القنوات', value: `${guild.channels.cache.size}`, inline: true },
-            { name: '🎭 الرتب', value: `${guild.roles.cache.size}`, inline: true },
-            { name: '😊 الإيموجيز', value: `${guild.emojis.cache.size}`, inline: true },
-            { name: '📅 تاريخ الإنشاء', value: `<t:${Math.floor(guild.createdTimestamp / 1000)}:R>`, inline: true }
-        ]
-    );
-
-    embed.setThumbnail(guild.iconURL());
-
-    return message.reply({ embeds: [embed] });
+    if (id === 'adv_reset_cooldowns') {
+        return interaction.editReply({
+            embeds: [new EmbedBuilder().setColor(C.orange)
+                .setTitle('⏰ إعادة تعيين Cooldowns')
+                .setDescription('> لا يمكن إعادة تعيين Cooldowns الفردية من هنا.\n> استخدم: `!admin reset-cooldown @شخص`')
+            ],
+            components: []
+        }).catch(() => {});
+    }
 }
 
 module.exports = {
-    // ─── واجهة الأمر المطلوبة من commandHandler ──────────────────
     name: 'admin-advanced',
-    aliases: ['ادمن-متقدم'],
-    description: 'أوامر إدارية متقدمة (mass kick/ban, slowmode, stats...)',
-    usage: 'admin-advanced [kick/ban/slowmode/stats/role-all]',
-    permissions: [PermissionFlagsBits.Administrator],
+    aliases: ['إدارة-متقدمة', 'ادارة-متقدمة', 'adv'],
+    description: 'لوحة الإدارة المتقدمة',
+    category: 'إدارة',
 
     async execute(message, args) {
-        // صاحب البوت يتخطى فحص الصلاحيات
-        if (!hasPermOrOwner(message.member, PermissionFlagsBits.Administrator)) {
-            return message.reply('❌ هذا الأمر يتطلب صلاحية Administrator!');
+        if (message.author.id !== config.ownerId &&
+            !message.member?.permissions.has(PermissionFlagsBits.Administrator)) {
+            return message.reply('❌ هذا الأمر للمالك والإدارة فقط!');
         }
-
-        const sub = args[0]?.toLowerCase();
-        if (sub === 'kick') return massKick(message, args.slice(1));
-        if (sub === 'ban') return massBan(message, args.slice(1));
-        if (sub === 'warn') return warn(message, args.slice(1));
-        if (sub === 'warnings') return warnings_list(message, args.slice(1));
-        if (sub === 'slowmode') return slowmode(message, args.slice(1));
-        if (sub === 'lock') return lock(message);
-        if (sub === 'unlock') return unlock(message);
-        if (sub === 'purge') return purge(message, args.slice(1));
-        if (sub === 'role-all') return roleAll(message, args.slice(1));
-        if (sub === 'unrole-all') return removeRoleAll(message, args.slice(1));
-        if (sub === 'nick-all') return nickAll(message, args.slice(1));
-        if (sub === 'stats') return serverStats(message);
-        return message.reply('❌ استخدام: `admin-advanced [kick/ban/warn/warnings/slowmode/lock/unlock/purge/role-all/stats]`');
+        const panel = buildMainPanel(message.guild, message.client);
+        await message.reply(panel);
     },
 
-    // ─── export الدوال للاستخدام المباشر ────────────────────────
-    massKick, massBan, warn, warnings_list,
-    slowmode, lock, unlock, purge,
-    roleAll, removeRoleAll, nickAll, serverStats,
+    handleInteraction,
+    buildMainPanel,
 };

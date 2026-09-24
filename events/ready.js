@@ -1,6 +1,7 @@
 const { Events, ActivityType } = require('discord.js');
 const autoTasks = require('../utils/auto-tasks');
 const ghostPing = require('../utils/ghost-ping');
+const logger = require('../utils/logger');
 
 // ── الأنظمة الاختيارية ─────────────────────────────────────────────────────
 let analytics = null;
@@ -13,6 +14,9 @@ module.exports = {
     once: true,
 
     async execute(client) {
+        // ─── تسجيل معرف البوت في Logger (لمنع تسجيل أفعاله الإدارية كمخالفات) ─
+        try { logger.setBotId(client.user.id); } catch {}
+
         const guildCount   = client.guilds.cache.size;
         const userCount    = client.users.cache.size;
         const commandCount = client.commands?.size ?? '?';
@@ -28,26 +32,25 @@ module.exports = {
         console.log(`║  ✅  الحالة    : Online & Ready!               ║`);
         console.log(`╚${LINE}╝\n`);
 
-        // ─── تحميل الحالة المحفوظة ─────────────────────────────────
+        // ─── تحميل الحالة المحفوظة (من MongoDB عبر bot-settings) ─────────────
         try {
-            const fs   = require('fs');
-            const path = require('path');
-            const statusPath = path.join(__dirname, '../data/status.json');
+            const botSettings = require('../utils/bot-settings');
+            const savedStatus = botSettings.get('botStatus'); // { type, text, status }
 
-            if (fs.existsSync(statusPath)) {
-                const s = JSON.parse(fs.readFileSync(statusPath, 'utf8'));
-                const typeMap = {
-                    PLAYING:   ActivityType.Playing,
-                    WATCHING:  ActivityType.Watching,
-                    LISTENING: ActivityType.Listening,
-                    COMPETING: ActivityType.Competing,
-                };
-                const actType = typeMap[s.type] ?? ActivityType.Watching;
+            const typeMap = {
+                PLAYING:   ActivityType.Playing,
+                WATCHING:  ActivityType.Watching,
+                LISTENING: ActivityType.Listening,
+                COMPETING: ActivityType.Competing,
+            };
+
+            if (savedStatus && typeof savedStatus === 'object' && savedStatus.text) {
+                const actType = typeMap[savedStatus.type] ?? ActivityType.Watching;
                 client.user.setPresence({
-                    activities: [{ name: s.text, type: actType }],
-                    status: s.status || 'online',
+                    activities: [{ name: savedStatus.text, type: actType }],
+                    status: savedStatus.status || 'online',
                 });
-                console.log(`✅ [Status] ${s.type}: ${s.text}`);
+                console.log(`✅ [Status] ${savedStatus.type}: ${savedStatus.text}`);
             } else {
                 client.user.setPresence({
                     activities: [{ name: '!help • اكتب help', type: ActivityType.Watching }],

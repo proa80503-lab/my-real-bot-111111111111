@@ -324,6 +324,9 @@ async function checkEmojiSpam(message) {
 // ─── لوق أحداث الحماية — يستخدم channel-resolver للبحث الذكي ─────────────
 async function logProtection(guild, data) {
     try {
+        // ✅ تجاهل أي فعل يُنفّذه البوت نفسه — لا نريده يظهر في لوق الحماية كمخالف
+        if (data.user && (data.user.bot === true || data.user.id === guild.client?.user?.id)) return;
+
         // نرسل أولاً لقناة الحماية، ثم لقناة السجلات كـ fallback
         const logCh = channelResolver.resolve(guild, 'logChannel');
         if (!logCh) return;

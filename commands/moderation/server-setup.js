@@ -1029,8 +1029,19 @@ function _sleep(ms) {
 // ─── تصدير الوحدة ────────────────────────────────────────────────────────────
 module.exports = {
     name: 'server-setup',
-    aliases: ['تفعيل-سيرفر', 'تفعيل سيرفر', 'اعادة تفعيل سيرفر', 'setup-server', 'reset-server', 'بناء-سيرفر'],
-    description: 'بناء وإعداد السيرفر بالكامل',
+    // ✅ الأوامر بمسافات لا تعمل في commandHandler (يقسّمها كـ args)
+    // لذلك نستخدم أوامر بشرطة أو بدون مسافة
+    aliases: [
+        'تفعيل',           // !تفعيل
+        'اعادةتفعيل',      // !اعادةتفعيل (بدون مسافة)
+        'اعادة-تفعيل',     // !اعادة-تفعيل (بشرطة)
+        'setup',           // !setup
+        'setup-server',    // !setup-server
+        'reset-server',    // !reset-server
+        'بناء-سيرفر',      // !بناء-سيرفر
+        'بناءسيرفر',       // !بناءسيرفر
+    ],
+    description: 'بناء وإعداد السيرفر بالكامل — !تفعيل أو !اعادةتفعيل',
     permissions: [PermissionFlagsBits.Administrator],
     category: 'إدارة',
 
@@ -1041,8 +1052,11 @@ module.exports = {
             return message.reply('❌ هذا الأمر يحتاج صلاحية **Administrator**!');
         }
 
-        // ✅ إصلاح: قبول isReset عبر options أو الكشف من message.content كـ fallback
+        // ✅ إصلاح isReset: نكتشف من اسم الأمر المُستخدَم أو من محتوى الرسالة
+        const usedCommand = message.content.slice(config.prefix.length).trim().split(/\s+/)[0].toLowerCase();
+        const resetKeywords = ['اعادةتفعيل', 'اعادة-تفعيل', 'reset-server', 'reset'];
         const isReset = options.isReset === true ||
+            resetKeywords.includes(usedCommand) ||
             message.content.toLowerCase().includes('اعادة') ||
             message.content.toLowerCase().includes('reset');
 

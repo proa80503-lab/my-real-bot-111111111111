@@ -25,9 +25,18 @@ const ROOM_COMMANDS = [
     'new-room', 'rooms', 'my-room', 'delete-room', 'renew-room',
 ];
 
-const BASIC_SETUP_TRIGGERS = ['تفعيل', 'اعداد', 'setup', '!setup'];
-const SERVER_SETUP_TRIGGERS = ['تفعيل سيرفر', 'تفعيل-سيرفر', 'اعادة تفعيل سيرفر', 'setup-server', 'reset-server', 'بناء-سيرفر'];
-const RESET_TRIGGERS = ['اعادة تفعيل', 'إعادة تفعيل', 'reset'];
+const BASIC_SETUP_TRIGGERS = ['اعداد', 'setup', '!setup'];
+// ملاحظة: 'تفعيل' بدون إضافة تنتقل لـ server-setup عبر aliases
+const SERVER_SETUP_TRIGGERS = [
+    'تفعيل سيرفر', 'تفعيل-سيرفر', 'اعداد سيرفر',
+    'setup-server', 'reset-server', 'بناء-سيرفر',
+];
+const RESET_TRIGGERS = [
+    'اعادة تفعيل', 'إعادة تفعيل',
+    'اعادةتفعيل', 'إعادةتفعيل',
+    'اعادة-تفعيل', 'إعادة-تفعيل',
+    'reset'
+];
 const NUKE_CLAN_TRIGGERS = ['حذف كلانات', 'حذف كلان', 'إلغاء كلانات', 'إلغاء كلان', 'nuke-clans', 'nuke_clans', 'reset-clans'];
 const CLAN_TRIGGERS = ['تفعيل كلان', 'تفعيل-كلان', 'setup clans', 'setup-clans', 'كلان', 'كلانات', 'قبائل', 'clan', 'clans'];
 const POLL_PREFIXES = ['بول ', 'poll ', 'استطلاع ', 'تصويت '];
@@ -76,17 +85,8 @@ module.exports = async function commandsMiddleware(message) {
         return false;
     }
 
-    // ── إعداد الرتب
-    if (BASIC_SETUP_TRIGGERS.some(t => lowMsg === t)) {
-        try {
-            const setupCmd = require('../../commands/moderation/setup');
-            await setupCmd.execute(message, []);
-        } catch (e) { console.error('[Setup]', e.message); }
-        return false;
-    }
-
-    // ── إعادة تفعيل (Reset)
-    if (RESET_TRIGGERS.some(t => lowMsg === t)) {
+    // ✅ إعادة تفعيل (Reset) — يجب أن يُفحص قبل كل شيء آخر
+    if (RESET_TRIGGERS.some(t => lowMsg === t || lowMsg.startsWith(t + ' '))) {
         try {
             const serverSetup = require('../../commands/moderation/server-setup');
             await serverSetup.execute(message, [], { isReset: true });
@@ -95,11 +95,20 @@ module.exports = async function commandsMiddleware(message) {
     }
 
     // ── تفعيل سيرفر
-    if (SERVER_SETUP_TRIGGERS.some(t => lowMsg === t)) {
+    if (SERVER_SETUP_TRIGGERS.some(t => lowMsg === t || lowMsg.startsWith(t + ' '))) {
         try {
             const serverSetup = require('../../commands/moderation/server-setup');
             await serverSetup.execute(message, []);
         } catch (e) { console.error('[ServerSetup]', e.message); }
+        return false;
+    }
+
+    // ── إعداد الرتب
+    if (BASIC_SETUP_TRIGGERS.some(t => lowMsg === t)) {
+        try {
+            const setupCmd = require('../../commands/moderation/setup');
+            await setupCmd.execute(message, []);
+        } catch (e) { console.error('[Setup]', e.message); }
         return false;
     }
 
