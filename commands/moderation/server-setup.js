@@ -520,64 +520,10 @@ async function postRoomsGuide(guild, roomsChannel) {
 // ─── نشر شرح الألوان ────────────────────────────────────────────────────────
 async function postColorsGuide(guild, colorsChannel) {
     try {
-        const old = await colorsChannel.messages.fetch({ limit: 10 }).catch(() => null);
-        if (old && old.size > 0) await colorsChannel.bulkDelete(old).catch(() => {});
-
-        const embed = new EmbedBuilder()
-            .setColor(C.pink)
-            .setTitle('🎨 اختر لون بروفايلك')
-            .setDescription([
-                '> **اضغط على الزر أدناه لتغيير لون اسمك في السيرفر!**',
-                '> 💎 **الألوان المميزة** تحتاج شارة VIP من المتجر',
-                '',
-                '```diff',
-                '+ الألوان المجانية المتاحة:',
-                '```',
-            ].join('\n'))
-            .addFields(
-                { name: '🔴 أحمر ناري',     value: '`لون أحمر`',     inline: true },
-                { name: '🔵 أزرق سماوي',   value: '`لون أزرق`',     inline: true },
-                { name: '🟢 أخضر زمردي',   value: '`لون أخضر`',     inline: true },
-                { name: '🟡 ذهبي فاخر',     value: '`لون ذهبي`',     inline: true },
-                { name: '🟣 بنفسجي ملكي',  value: '`لون بنفسجي`',   inline: true },
-                { name: '🌸 وردي جميل',     value: '`لون وردي`',     inline: true },
-                { name: '🟠 برتقالي',       value: '`لون برتقالي`',  inline: true },
-                { name: '💠 سماوي فاتح',    value: '`لون سماوي`',    inline: true },
-                { name: '⚫ أسود أنيق',     value: '`لون أسود`',     inline: true },
-                { name: '⚪ أبيض ناصع',     value: '`لون أبيض`',     inline: true },
-                {
-                    name: '💎 ألوان VIP حصرية',
-                    value: [
-                        '🌈 **رادجيانت** `لون رادجيانت` — 5000 💰',
-                        '🌟 **نيون** `لون نيون` — 3000 💰',
-                        '🔥 **ناري** `لون ناري` — 4000 💰',
-                        '⚡ **كهربائي** `لون كهربائي` — 3500 💰',
-                    ].join('\n'),
-                    inline: false,
-                }
-            )
-            .setFooter({ text: '🎨 غير لونك وتميز بين الأعضاء!' })
-            .setTimestamp();
-
-        const row1 = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('color_btn_أحمر').setLabel('🔴 أحمر').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId('color_btn_أزرق').setLabel('🔵 أزرق').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId('color_btn_أخضر').setLabel('🟢 أخضر').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId('color_btn_ذهبي').setLabel('🟡 ذهبي').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('color_btn_بنفسجي').setLabel('🟣 بنفسجي').setStyle(ButtonStyle.Secondary),
-        );
-        const row2 = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('color_btn_وردي').setLabel('🌸 وردي').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('color_btn_برتقالي').setLabel('🟠 برتقالي').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('color_btn_سماوي').setLabel('💠 سماوي').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId('color_btn_أسود').setLabel('⚫ أسود').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('color_btn_أبيض').setLabel('⚪ أبيض').setStyle(ButtonStyle.Secondary),
-        );
-
-        await colorsChannel.send({ embeds: [embed], components: [row1, row2] });
-        console.log('[ServerSetup] ✅ تم نشر دليل الألوان');
+        const colorSystem = require('../../utils/color-system');
+        await colorSystem.setupColorChannel(guild, colorsChannel, null);
     } catch (err) {
-        console.error('[ServerSetup] خطأ في نشر الألوان:', err.message);
+        console.error('[ServerSetup] خطأ في إعداد قناة الألوان:', err.message);
     }
 }
 

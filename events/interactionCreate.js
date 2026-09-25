@@ -447,8 +447,8 @@ async function _handleButton(interaction) {
         return m?.handleMarryInteraction?.(interaction);
     }
 
-    // Moderation confirmation (mod_confirm_, mod_cancel_)
-    if (id.startsWith('mod_confirm_') || id.startsWith('mod_cancel_')) {
+    // Moderation confirmation (mod_confirm_, mod_cancel_, clear_warns_)
+    if (id.startsWith('mod_confirm_') || id.startsWith('mod_cancel_') || id.startsWith('clear_warns_')) {
         return _require('../commands/moderation/mod-buttons')?.handleModButton(interaction);
     }
 

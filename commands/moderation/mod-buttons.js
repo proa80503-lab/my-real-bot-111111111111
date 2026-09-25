@@ -208,6 +208,28 @@ module.exports.mute = {
 // ─── معالج الأزرار الموحّد ─────────────────────────────────────────────────
 async function handleModButton(interaction) {
     const id = interaction.customId;
+
+    if (id.startsWith('clear_warns_')) {
+        const [, , targetId, authorId] = id.split('_');
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: '❌ فقط من طلب الأمر يمكنه التنظيف.', flags: MessageFlags.Ephemeral });
+        }
+        if (!hasPermOrOwner(interaction.member, PermissionFlagsBits.ModerateMembers)) {
+            return interaction.reply({ content: '❌ ليس لديك صلاحية!', flags: MessageFlags.Ephemeral });
+        }
+        db.updateFields(targetId, { warnings: 0, warnLogs: [] });
+        return interaction.update({
+            embeds: [
+                new EmbedBuilder()
+                    .setColor('#57F287')
+                    .setTitle('🗑️ تم تنظيف السجل')
+                    .setDescription(`> تم إزالة جميع التحذيرات بنجاح.`)
+                    .setTimestamp()
+            ],
+            components: []
+        });
+    }
+
     if (!id.startsWith('mod_confirm_') && !id.startsWith('mod_cancel_')) return;
 
     // استخراج authorId من الـ customId (المنسق: mod_confirm_type_targetId_authorId)
@@ -275,11 +297,35 @@ async function handleModButton(interaction) {
         } else if (type === 'warn') {
             const userData = db.getUserData(target.id);
             const warnings = (userData.warnings || 0) + 1;
-            db.updateFields(target.id, { warnings });
+            
+            const warnLogs = userData.warnLogs || [];
+            warnLogs.push({
+                reason: reason,
+                author: author.id,
+                date: Date.now()
+            });
+            
+            db.updateFields(target.id, { warnings, warnLogs });
             resultExtra = `⚠️ هذا التحذير رقم ${warnings} للعضو`;
+            
+            let escalationMsg = '';
+            if (warnings === 2) {
+                await member.timeout(60 * 60 * 1000, `تلقائي: التحذير الثاني - ${reason}`).catch(()=>{});
+                escalationMsg = `\n🔇 **عقوبة:** كتم لمدة ساعة (تحذير 2)`;
+                resultExtra += escalationMsg;
+            } else if (warnings === 3) {
+                await member.timeout(24 * 60 * 60 * 1000, `تلقائي: التحذير الثالث - ${reason}`).catch(()=>{});
+                escalationMsg = `\n🔇 **عقوبة:** كتم لمدة 24 ساعة (تحذير 3)`;
+                resultExtra += escalationMsg;
+            } else if (warnings >= 4) {
+                await member.kick(`تلقائي: التحذير ${warnings} - ${reason}`).catch(()=>{});
+                escalationMsg = `\n👢 **عقوبة:** طرد من السيرفر (تحذير 4+)`;
+                resultExtra += escalationMsg;
+            }
+
             // إرسال DM
             target.send?.(
-                `⚠️ **تحذير** في سيرفر **${guild.name}**\nالسبب: ${reason}\nإجمالي تحذيراتك: **${warnings}**`
+                `⚠️ **تحذير** في السيرفر\nالسبب: ${reason}\nإجمالي تحذيراتك: **${warnings}**${escalationMsg}`
             ).catch(() => {});
 
         } else if (type === 'mute') {
