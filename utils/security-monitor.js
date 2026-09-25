@@ -38,10 +38,13 @@ const systemStatus = {
 
 // ─── Whitelist (أصحاب السيرفر والثقات) ──────────────────────────────────────
 const trustedUsers = new Set();
+let _botId = null;
 
+function setBotId(id) { _botId = id; }
 function addTrustedUser(userId) { trustedUsers.add(userId); }
 function removeTrustedUser(userId) { trustedUsers.delete(userId); }
 function isTrusted(userId, guildOwnerId) {
+    if (_botId && userId === _botId) return true; // لا تعاقب البوت نفسه
     return userId === guildOwnerId ||
         userId === config.ownerId ||
         trustedUsers.has(userId);
@@ -644,4 +647,5 @@ module.exports = {
     // Internal (reusable)
     _sendSecurityLog,
     _alertOwner,
+    setBotId, // Added for bot self-protection
 };

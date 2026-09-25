@@ -61,27 +61,27 @@ async function sendLog(guild, embed) {
 }
 
 // ─── Helper: جلب المنفذ من Audit Log بدقة ────────────────────────────────────
-async function getExecutor(guild, type, targetId = null, windowMs = 10000) {
-    try {
-        // ننتظر قليلاً لأن Audit Log قد يتأخر (Discord يأخذ ~1-2 ثانية)
-        await new Promise(r => setTimeout(r, 1500));
+async function getExecutor(guild, type, targetId = null, windowMs = 15000) {
+    if (!guild || !guild.members.me.permissions.has('ViewAuditLog')) return null;
 
-        const auditLogs = await guild.fetchAuditLogs({ type, limit: 10 });
-
-        const entry = auditLogs.entries.find(e => {
-            // نافذة زمنية مناسبة لمنع ربط event قديم بعملية جديدة
-            const isRecent = (Date.now() - e.createdTimestamp) < windowMs;
-            const targetMatch = targetId
-                ? (e.target?.id === targetId || e.targetId === targetId)
-                : true;
-            return isRecent && targetMatch;
-        });
-
-        if (!entry) return null;
-        return entry.executor;
-    } catch {
-        return null; // لا نخمن — نرجع null
+    // Retry mechanism: جرب 3 مرات لضمان التقاط الحدث من Audit Log
+    for (let i = 0; i < 3; i++) {
+        await new Promise(r => setTimeout(r, 1000 + (i * 500))); // 1s, 1.5s, 2s
+        try {
+            const auditLogs = await guild.fetchAuditLogs({ type, limit: 20 });
+            const entry = auditLogs.entries.find(e => {
+                const isRecent = (Date.now() - e.createdTimestamp) < windowMs;
+                const targetMatch = targetId
+                    ? (e.target?.id === targetId || e.targetId === targetId)
+                    : true;
+                return isRecent && targetMatch;
+            });
+            if (entry) return entry.executor;
+        } catch {
+            // تجاهل الأخطاء واستمر في المحاولة
+        }
     }
+    return null;
 }
 
 // === سجلات الصوت ===
@@ -145,32 +145,34 @@ async function logVoiceState(oldState, newState) {
 async function logMessageDelete(message) {
     if (!message.author) return;
     if (!message.guild) return;
-    // ✅ تجاهل الرسائل التي حذفها البوت نفسه (مكافحة سبام، كلام رديء، إلخ)
     if (message.author.bot) return;
 
     // في حالة حذف الرسالة، الـ target في الـ Audit Log هو صاحب الرسالة
     const executor = await getExecutor(message.guild, AuditLogEvent.MessageDelete, message.author.id);
 
-    // ✅ إذا كان الـ executor هو البوت نفسه → هذا إجراء حماية مقصود، لا نُسجله
     if (_isBotAction(executor)) return;
 
     const safeContent = message.content
         ? (message.content.length > 1024 ? message.content.substring(0, 1020) + '...' : message.content)
         : '*بدون محتوى نصي*';
 
+    const executorText = executor ? `${executor} (\`${executor.id}\`)` : `${message.author} (بنفسه/تطبيق طرف ثالث)`;
+
     const embed = new EmbedBuilder()
-        .setColor('#FF0000')
+        .setColor('#ED4245')
         .setTitle('🗑️ رسالة محذوفة')
-        .setDescription(`**القناة:** ${message.channel}\n**المؤلف:** ${message.author}`)
+        .setAuthor({ name: message.author.tag, iconURL: message.author.displayAvatarURL() })
+        .setDescription(`**تم حذف رسالة في القناة:** ${message.channel}`)
         .addFields(
-            { name: 'المحتوى', value: safeContent },
-            { name: 'المحذوف بواسطة', value: executor ? `${executor}` : `${message.author} (بنفسه)` }
+            { name: '📝 المحتوى', value: `\`\`\`\n${safeContent}\n\`\`\``, inline: false },
+            { name: '👤 صاحب الرسالة', value: `${message.author} (\`${message.author.id}\`)`, inline: true },
+            { name: '👮 المحذوف بواسطة', value: executorText, inline: true }
         )
         .setTimestamp()
-        .setFooter({ text: `ID: ${message.id}` });
+        .setFooter({ text: `Message ID: ${message.id}` });
 
     if (message.attachments.size > 0) {
-        embed.addFields({ name: 'المرفقات', value: `${message.attachments.size} ملف(ات)` });
+        embed.addFields({ name: '📎 المرفقات', value: `${message.attachments.size} ملف(ات)`, inline: false });
     }
 
     await sendLog(message.guild, embed);
@@ -180,7 +182,6 @@ async function logMessageDelete(message) {
 async function logMessageUpdate(oldMessage, newMessage) {
     if (!newMessage.guild) return;
     if (oldMessage.content === newMessage.content) return;
-    // ✅ تجاهل تعديلات البوت على رسائله (embeds، إلخ)
     if (newMessage.author?.bot) return;
 
     const safeOldContent = oldMessage.content
@@ -192,15 +193,17 @@ async function logMessageUpdate(oldMessage, newMessage) {
         : '*بدون محتوى*';
 
     const embed = new EmbedBuilder()
-        .setColor('#FFA500')
+        .setColor('#FEE75C')
         .setTitle('✏️ رسالة معدلة')
-        .setDescription(`**القناة:** ${newMessage.channel}\n**المؤلف:** ${newMessage.author}`)
+        .setAuthor({ name: newMessage.author.tag, iconURL: newMessage.author.displayAvatarURL() })
+        .setDescription(`**تم تعديل رسالة في القناة:** ${newMessage.channel}`)
         .addFields(
-            { name: 'قبل', value: safeOldContent },
-            { name: 'بعد', value: safeNewContent }
+            { name: '🔴 النص السابق', value: `\`\`\`\n${safeOldContent}\n\`\`\``, inline: false },
+            { name: '🟢 النص الجديد', value: `\`\`\`\n${safeNewContent}\n\`\`\``, inline: false },
+            { name: '👤 صاحب الرسالة', value: `${newMessage.author} (\`${newMessage.author.id}\`)`, inline: true }
         )
         .setTimestamp()
-        .setFooter({ text: `ID: ${newMessage.id}` });
+        .setFooter({ text: `Message ID: ${newMessage.id}` });
 
     await sendLog(newMessage.guild, embed);
 }
@@ -286,19 +289,20 @@ async function logMemberUpdate(oldMember, newMember) {
 async function logChannelCreate(channel) {
     if (!channel.guild) return;
 
-    const executor = await getExecutor(channel.guild, AuditLogEvent.ChannelCreate);
+    const executor = await getExecutor(channel.guild, AuditLogEvent.ChannelCreate, channel.id);
+    const executorText = executor ? `${executor} (\`${executor.id}\`)` : 'غير معروف';
 
     const embed = new EmbedBuilder()
-        .setColor('#00FF00')
-        .setTitle('📁 قناة جديدة')
-        .setDescription(`**القناة:** ${channel}`)
+        .setColor('#57F287')
+        .setTitle('📁 قناة جديدة تم إنشاؤها')
+        .setDescription(`**تم إنشاء قناة جديدة:** ${channel}`)
         .addFields(
-            { name: 'الاسم', value: channel.name, inline: true },
-            { name: 'النوع', value: channel.type === 0 ? 'نصية' : 'صوتية', inline: true },
-            { name: 'المنشئ', value: executor ? `${executor}` : 'غير معروف', inline: true }
+            { name: '🏷️ اسم القناة', value: `\`${channel.name}\``, inline: true },
+            { name: '📋 نوع القناة', value: channel.type === 0 ? 'نصية 💬' : (channel.type === 2 ? 'صوتية 🔊' : 'أخرى'), inline: true },
+            { name: '👮 المنشئ', value: executorText, inline: false }
         )
         .setTimestamp()
-        .setFooter({ text: `ID: ${channel.id}` });
+        .setFooter({ text: `Channel ID: ${channel.id}` });
 
     await sendLog(channel.guild, embed);
 }
@@ -307,18 +311,19 @@ async function logChannelCreate(channel) {
 async function logChannelDelete(channel) {
     if (!channel.guild) return;
 
-    const executor = await getExecutor(channel.guild, AuditLogEvent.ChannelDelete);
+    const executor = await getExecutor(channel.guild, AuditLogEvent.ChannelDelete, channel.id);
+    const executorText = executor ? `${executor} (\`${executor.id}\`)` : 'غير معروف';
 
     const embed = new EmbedBuilder()
-        .setColor('#FF0000')
-        .setTitle('🗑️ قناة محذوفة')
-        .setDescription(`**الاسم:** ${channel.name}`)
+        .setColor('#ED4245')
+        .setTitle('🗑️ قناة تم حذفها')
+        .setDescription(`**اسم القناة:** \`${channel.name}\``)
         .addFields(
-            { name: 'النوع', value: channel.type === 0 ? 'نصية' : 'صوتية', inline: true },
-            { name: 'المحذوف بواسطة', value: executor ? `${executor}` : 'غير معروف', inline: true }
+            { name: '📋 نوع القناة', value: channel.type === 0 ? 'نصية 💬' : (channel.type === 2 ? 'صوتية 🔊' : 'أخرى'), inline: true },
+            { name: '👮 المحذوف بواسطة', value: executorText, inline: false }
         )
         .setTimestamp()
-        .setFooter({ text: `ID: ${channel.id}` });
+        .setFooter({ text: `Channel ID: ${channel.id}` });
 
     await sendLog(channel.guild, embed);
 }
@@ -327,37 +332,39 @@ async function logChannelDelete(channel) {
 
 // رول تم إنشاؤه
 async function logRoleCreate(role) {
-    const executor = await getExecutor(role.guild, AuditLogEvent.RoleCreate);
+    const executor = await getExecutor(role.guild, AuditLogEvent.RoleCreate, role.id);
+    const executorText = executor ? `${executor} (\`${executor.id}\`)` : 'غير معروف';
 
     const embed = new EmbedBuilder()
-        .setColor('#00FF00')
-        .setTitle('🎭 رول جديد')
-        .setDescription(`**الرول:** ${role}`)
+        .setColor('#57F287')
+        .setTitle('🎭 رتبة جديدة تم إنشاؤها')
+        .setDescription(`**الرتبة:** ${role}`)
         .addFields(
-            { name: 'الاسم', value: role.name, inline: true },
-            { name: 'اللون', value: role.hexColor, inline: true },
-            { name: 'المنشئ', value: executor ? `${executor}` : 'غير معروف', inline: true }
+            { name: '🏷️ اسم الرتبة', value: `\`${role.name}\``, inline: true },
+            { name: '🎨 اللون', value: `\`${role.hexColor}\``, inline: true },
+            { name: '👮 المنشئ', value: executorText, inline: false }
         )
         .setTimestamp()
-        .setFooter({ text: `ID: ${role.id}` });
+        .setFooter({ text: `Role ID: ${role.id}` });
 
     await sendLog(role.guild, embed);
 }
 
 // رول تم حذفه
 async function logRoleDelete(role) {
-    const executor = await getExecutor(role.guild, AuditLogEvent.RoleDelete);
+    const executor = await getExecutor(role.guild, AuditLogEvent.RoleDelete, role.id);
+    const executorText = executor ? `${executor} (\`${executor.id}\`)` : 'غير معروف';
 
     const embed = new EmbedBuilder()
-        .setColor('#FF0000')
-        .setTitle('🗑️ رول محذوف')
-        .setDescription(`**الاسم:** ${role.name}`)
+        .setColor('#ED4245')
+        .setTitle('🗑️ رتبة تم حذفها')
+        .setDescription(`**اسم الرتبة:** \`${role.name}\``)
         .addFields(
-            { name: 'اللون', value: role.hexColor, inline: true },
-            { name: 'المحذوف بواسطة', value: executor ? `${executor}` : 'غير معروف', inline: true }
+            { name: '🎨 اللون', value: `\`${role.hexColor}\``, inline: true },
+            { name: '👮 المحذوف بواسطة', value: executorText, inline: false }
         )
         .setTimestamp()
-        .setFooter({ text: `ID: ${role.id}` });
+        .setFooter({ text: `Role ID: ${role.id}` });
 
     await sendLog(role.guild, embed);
 }
@@ -366,37 +373,43 @@ async function logRoleDelete(role) {
 
 // باند
 async function logBan(ban) {
-    const executor = await getExecutor(ban.guild, AuditLogEvent.MemberBanAdd);
+    const executor = await getExecutor(ban.guild, AuditLogEvent.MemberBanAdd, ban.user.id);
+    const executorText = executor ? `${executor} (\`${executor.id}\`)` : 'غير معروف';
 
     const embed = new EmbedBuilder()
         .setColor('#8B0000')
-        .setTitle('🔨 عضو محظور')
-        .setDescription(`**العضو:** ${ban.user.tag}`)
+        .setTitle('🔨 تم حظر عضو (Ban)')
+        .setAuthor({ name: ban.user.tag, iconURL: ban.user.displayAvatarURL() })
+        .setDescription(`**تم حظر العضو:** ${ban.user}`)
         .addFields(
-            { name: 'السبب', value: ban.reason || 'لا يوجد سبب' },
-            { name: 'المحظور بواسطة', value: executor ? `${executor}` : 'غير معروف' }
+            { name: '📋 السبب', value: `\`${ban.reason || 'لا يوجد سبب'}\``, inline: false },
+            { name: '👤 العضو', value: `\`${ban.user.id}\``, inline: true },
+            { name: '👮 المحظور بواسطة', value: executorText, inline: true }
         )
         .setThumbnail(ban.user.displayAvatarURL())
         .setTimestamp()
-        .setFooter({ text: `ID: ${ban.user.id}` });
+        .setFooter({ text: `User ID: ${ban.user.id}` });
 
     await sendLog(ban.guild, embed);
 }
 
 // إلغاء باند
 async function logUnban(ban) {
-    const executor = await getExecutor(ban.guild, AuditLogEvent.MemberBanRemove);
+    const executor = await getExecutor(ban.guild, AuditLogEvent.MemberBanRemove, ban.user.id);
+    const executorText = executor ? `${executor} (\`${executor.id}\`)` : 'غير معروف';
 
     const embed = new EmbedBuilder()
-        .setColor('#00FF00')
-        .setTitle('🔓 إلغاء حظر')
-        .setDescription(`**العضو:** ${ban.user.tag}`)
+        .setColor('#57F287')
+        .setTitle('🔓 تم رفع الحظر (Unban)')
+        .setAuthor({ name: ban.user.tag, iconURL: ban.user.displayAvatarURL() })
+        .setDescription(`**تم رفع الحظر عن العضو:** ${ban.user}`)
         .addFields(
-            { name: 'تم الإلغاء بواسطة', value: executor ? `${executor}` : 'غير معروف' }
+            { name: '👤 العضو', value: `\`${ban.user.id}\``, inline: true },
+            { name: '👮 تم الإلغاء بواسطة', value: executorText, inline: true }
         )
         .setThumbnail(ban.user.displayAvatarURL())
         .setTimestamp()
-        .setFooter({ text: `ID: ${ban.user.id}` });
+        .setFooter({ text: `User ID: ${ban.user.id}` });
 
     await sendLog(ban.guild, embed);
 }
@@ -404,18 +417,25 @@ async function logUnban(ban) {
 // === سجلات الطرد والتايم أوت ===
 
 // طرد عضو (Kick)
-async function logKick(member, executor) {
+async function logKick(member, executor = null) {
+    // If executor is not passed directly, try to fetch it
+    if (!executor) {
+        executor = await getExecutor(member.guild, AuditLogEvent.MemberKick, member.id);
+    }
+    const executorText = executor ? `${executor} (\`${executor.id}\`)` : 'غير معروف';
+
     const embed = new EmbedBuilder()
-        .setColor('#FF4500')
-        .setTitle('👢 طرد عضو')
-        .setDescription(`**العضو:** ${member.user.tag} مُغادر بسبب الطرد`)
+        .setColor('#E67E22')
+        .setTitle('👢 تم طرد عضو (Kick)')
+        .setAuthor({ name: member.user.tag, iconURL: member.user.displayAvatarURL() })
+        .setDescription(`**تم طرد العضو:** ${member.user}`)
         .addFields(
-            { name: 'الاسم', value: member.user.tag, inline: true },
-            { name: 'المطرود بواسطة', value: executor ? `${executor}` : 'غير معروف', inline: true }
+            { name: '👤 العضو', value: `\`${member.id}\``, inline: true },
+            { name: '👮 المطرود بواسطة', value: executorText, inline: true }
         )
         .setThumbnail(member.user.displayAvatarURL())
         .setTimestamp()
-        .setFooter({ text: `ID: ${member.id}` });
+        .setFooter({ text: `User ID: ${member.id}` });
 
     await sendLog(member.guild, embed);
 }
@@ -428,34 +448,40 @@ async function logTimeout(oldMember, newMember) {
     // Timeout مُضاف
     if (!wasTimedOut && isTimedOut) {
         const executor = await getExecutor(newMember.guild, AuditLogEvent.MemberUpdate, newMember.id);
+        const executorText = executor ? `${executor} (\`${executor.id}\`)` : 'غير معروف';
         const until = Math.floor(new Date(isTimedOut).getTime() / 1000);
+        
         const embed = new EmbedBuilder()
-            .setColor('#FFA500')
-            .setTitle('🔇 كتم صوت (Timeout)')
+            .setColor('#FEE75C')
+            .setTitle('🔇 تم إعطاء العضو كتم صوتي (Timeout)')
+            .setAuthor({ name: newMember.user.tag, iconURL: newMember.user.displayAvatarURL() })
             .setDescription(`**العضو:** ${newMember}`)
             .addFields(
-                { name: 'حتى', value: `<t:${until}:R>`, inline: true },
-                { name: 'بواسطة', value: executor ? `${executor}` : 'غير معروف', inline: true }
+                { name: '⏳ حتى', value: `<t:${until}:R>`, inline: true },
+                { name: '👮 بواسطة', value: executorText, inline: true }
             )
             .setThumbnail(newMember.user.displayAvatarURL())
             .setTimestamp()
-            .setFooter({ text: `ID: ${newMember.id}` });
+            .setFooter({ text: `User ID: ${newMember.id}` });
 
         await sendLog(newMember.guild, embed);
     }
     // Timeout مُرفع
     else if (wasTimedOut && !isTimedOut) {
         const executor = await getExecutor(newMember.guild, AuditLogEvent.MemberUpdate, newMember.id);
+        const executorText = executor ? `${executor} (\`${executor.id}\`)` : 'غير معروف';
+        
         const embed = new EmbedBuilder()
-            .setColor('#00FF00')
-            .setTitle('🔊 رُفع كتم الصوت (Timeout)')
+            .setColor('#57F287')
+            .setTitle('🔊 رُفع كتم الصوت (Timeout Removed)')
+            .setAuthor({ name: newMember.user.tag, iconURL: newMember.user.displayAvatarURL() })
             .setDescription(`**العضو:** ${newMember}`)
             .addFields(
-                { name: 'رُفع بواسطة', value: executor ? `${executor}` : 'غير معروف', inline: true }
+                { name: '👮 رُفع بواسطة', value: executorText, inline: true }
             )
             .setThumbnail(newMember.user.displayAvatarURL())
             .setTimestamp()
-            .setFooter({ text: `ID: ${newMember.id}` });
+            .setFooter({ text: `User ID: ${newMember.id}` });
 
         await sendLog(newMember.guild, embed);
     }
@@ -467,30 +493,32 @@ async function logChannelUpdate(oldChannel, newChannel) {
     const changes = [];
 
     if (oldChannel.name !== newChannel.name) {
-        changes.push(`**الاسم:** \`${oldChannel.name}\` → \`${newChannel.name}\``);
+        changes.push(`**الاسم:** \`${oldChannel.name}\` ➔ \`${newChannel.name}\``);
     }
     if (oldChannel.topic !== newChannel.topic) {
         const oldTopic = oldChannel.topic || '*لا يوجد*';
         const newTopic = newChannel.topic || '*لا يوجد*';
-        changes.push(`**الوصف:** \`${oldTopic.substring(0, 50)}\` → \`${newTopic.substring(0, 50)}\``);
+        changes.push(`**الوصف:** \`${oldTopic.substring(0, 50)}\` ➔ \`${newTopic.substring(0, 50)}\``);
     }
     if (oldChannel.rateLimitPerUser !== newChannel.rateLimitPerUser) {
-        changes.push(`**Slow Mode:** ${oldChannel.rateLimitPerUser}ث → ${newChannel.rateLimitPerUser}ث`);
+        changes.push(`**Slow Mode:** ${oldChannel.rateLimitPerUser}ث ➔ ${newChannel.rateLimitPerUser}ث`);
     }
 
     if (changes.length === 0) return;
 
-    const executor = await getExecutor(newChannel.guild, AuditLogEvent.ChannelUpdate);
+    const executor = await getExecutor(newChannel.guild, AuditLogEvent.ChannelUpdate, newChannel.id);
+    const executorText = executor ? `${executor} (\`${executor.id}\`)` : 'غير معروف';
+
     const embed = new EmbedBuilder()
         .setColor('#3498DB')
-        .setTitle('📝 تعديل قناة')
+        .setTitle('📝 قناة تم تعديلها')
         .setDescription(`**القناة:** ${newChannel}`)
         .addFields(
-            { name: 'التغييرات', value: changes.join('\n') },
-            { name: 'بواسطة', value: executor ? `${executor}` : 'غير معروف', inline: true }
+            { name: '📋 التغييرات', value: changes.join('\n'), inline: false },
+            { name: '👮 بواسطة', value: executorText, inline: true }
         )
         .setTimestamp()
-        .setFooter({ text: `ID: ${newChannel.id}` });
+        .setFooter({ text: `Channel ID: ${newChannel.id}` });
 
     await sendLog(newChannel.guild, embed);
 }
@@ -500,33 +528,145 @@ async function logRoleUpdate(oldRole, newRole) {
     const changes = [];
 
     if (oldRole.name !== newRole.name) {
-        changes.push(`**الاسم:** \`${oldRole.name}\` → \`${newRole.name}\``);
+        changes.push(`**الاسم:** \`${oldRole.name}\` ➔ \`${newRole.name}\``);
     }
     if (oldRole.hexColor !== newRole.hexColor) {
-        changes.push(`**اللون:** \`${oldRole.hexColor}\` → \`${newRole.hexColor}\``);
+        changes.push(`**اللون:** \`${oldRole.hexColor}\` ➔ \`${newRole.hexColor}\``);
     }
     if (oldRole.hoist !== newRole.hoist) {
-        changes.push(`**الظهور المنفصل:** ${oldRole.hoist ? 'نعم' : 'لا'} → ${newRole.hoist ? 'نعم' : 'لا'}`);
+        changes.push(`**الظهور المنفصل:** ${oldRole.hoist ? 'نعم' : 'لا'} ➔ ${newRole.hoist ? 'نعم' : 'لا'}`);
     }
     if (oldRole.mentionable !== newRole.mentionable) {
-        changes.push(`**قابل للمنشن:** ${oldRole.mentionable ? 'نعم' : 'لا'} → ${newRole.mentionable ? 'نعم' : 'لا'}`);
+        changes.push(`**قابل للمنشن:** ${oldRole.mentionable ? 'نعم' : 'لا'} ➔ ${newRole.mentionable ? 'نعم' : 'لا'}`);
     }
 
     if (changes.length === 0) return;
 
-    const executor = await getExecutor(newRole.guild, AuditLogEvent.RoleUpdate);
+    const executor = await getExecutor(newRole.guild, AuditLogEvent.RoleUpdate, newRole.id);
+    const executorText = executor ? `${executor} (\`${executor.id}\`)` : 'غير معروف';
+    
     const embed = new EmbedBuilder()
         .setColor('#9B59B6')
-        .setTitle('🎭 تعديل رول')
-        .setDescription(`**الرول:** ${newRole}`)
+        .setTitle('🎭 رتبة تم تعديلها')
+        .setDescription(`**الرتبة:** ${newRole}`)
         .addFields(
-            { name: 'التغييرات', value: changes.join('\n') },
-            { name: 'بواسطة', value: executor ? `${executor}` : 'غير معروف', inline: true }
+            { name: '📋 التغييرات', value: changes.join('\n'), inline: false },
+            { name: '👮 بواسطة', value: executorText, inline: true }
         )
         .setTimestamp()
-        .setFooter({ text: `ID: ${newRole.id}` });
+        .setFooter({ text: `Role ID: ${newRole.id}` });
 
     await sendLog(newRole.guild, embed);
+}
+
+// === سجلات الإيموجيات ===
+async function logEmojiCreate(emoji) {
+    const executor = await getExecutor(emoji.guild, AuditLogEvent.EmojiCreate, emoji.id);
+    const executorText = executor ? `${executor} (\`${executor.id}\`)` : 'غير معروف';
+
+    const embed = new EmbedBuilder()
+        .setColor('#57F287')
+        .setTitle('😀 إيموجي جديد تم إضافته')
+        .setDescription(`**الإيموجي:** <:${emoji.name}:${emoji.id}>`)
+        .addFields(
+            { name: '🏷️ الاسم', value: `\`${emoji.name}\``, inline: true },
+            { name: '👮 المنشئ', value: executorText, inline: true }
+        )
+        .setThumbnail(emoji.url)
+        .setTimestamp()
+        .setFooter({ text: `Emoji ID: ${emoji.id}` });
+
+    await sendLog(emoji.guild, embed);
+}
+
+async function logEmojiDelete(emoji) {
+    const executor = await getExecutor(emoji.guild, AuditLogEvent.EmojiDelete, emoji.id);
+    const executorText = executor ? `${executor} (\`${executor.id}\`)` : 'غير معروف';
+
+    const embed = new EmbedBuilder()
+        .setColor('#ED4245')
+        .setTitle('🗑️ إيموجي تم حذفه')
+        .addFields(
+            { name: '🏷️ الاسم', value: `\`${emoji.name}\``, inline: true },
+            { name: '👮 المحذوف بواسطة', value: executorText, inline: true }
+        )
+        .setThumbnail(emoji.url)
+        .setTimestamp()
+        .setFooter({ text: `Emoji ID: ${emoji.id}` });
+
+    await sendLog(emoji.guild, embed);
+}
+
+// === سجلات الدعوات ===
+async function logInviteCreate(invite) {
+    const executor = await getExecutor(invite.guild, AuditLogEvent.InviteCreate);
+    const executorText = executor ? `${executor} (\`${executor.id}\`)` : (invite.inviter ? `${invite.inviter} (\`${invite.inviter.id}\`)` : 'غير معروف');
+
+    const embed = new EmbedBuilder()
+        .setColor('#57F287')
+        .setTitle('🔗 رابط دعوة جديد')
+        .setDescription(`**الرابط:** ${invite.url}`)
+        .addFields(
+            { name: '📣 القناة', value: `${invite.channel}`, inline: true },
+            { name: '👮 المنشئ', value: executorText, inline: true },
+            { name: '⏳ الاستخدامات المسموحة', value: invite.maxUses === 0 ? 'غير محدود' : `${invite.maxUses}`, inline: true },
+            { name: '⏱️ ينتهي بعد', value: invite.maxAge === 0 ? 'أبداً' : `<t:${Math.floor(invite.expiresTimestamp / 1000)}:R>`, inline: true }
+        )
+        .setTimestamp()
+        .setFooter({ text: `Invite Code: ${invite.code}` });
+
+    await sendLog(invite.guild, embed);
+}
+
+async function logInviteDelete(invite) {
+    const executor = await getExecutor(invite.guild, AuditLogEvent.InviteDelete);
+    const executorText = executor ? `${executor} (\`${executor.id}\`)` : 'غير معروف';
+
+    const embed = new EmbedBuilder()
+        .setColor('#ED4245')
+        .setTitle('🗑️ رابط دعوة تم حذفه')
+        .setDescription(`**الرمز:** \`${invite.code}\``)
+        .addFields(
+            { name: '📣 القناة', value: `${invite.channel}`, inline: true },
+            { name: '👮 المحذوف بواسطة', value: executorText, inline: true }
+        )
+        .setTimestamp()
+        .setFooter({ text: `Invite Code: ${invite.code}` });
+
+    await sendLog(invite.guild, embed);
+}
+
+// === سجلات إعدادات السيرفر ===
+async function logGuildUpdate(oldGuild, newGuild) {
+    const changes = [];
+
+    if (oldGuild.name !== newGuild.name) {
+        changes.push(`**الاسم:** \`${oldGuild.name}\` ➔ \`${newGuild.name}\``);
+    }
+    if (oldGuild.icon !== newGuild.icon) {
+        changes.push(`**الأيقونة:** تم تغيير الصورة`);
+    }
+    if (oldGuild.banner !== newGuild.banner) {
+        changes.push(`**البانر:** تم تغيير البانر`);
+    }
+
+    if (changes.length === 0) return;
+
+    const executor = await getExecutor(newGuild, AuditLogEvent.GuildUpdate, newGuild.id);
+    const executorText = executor ? `${executor} (\`${executor.id}\`)` : 'غير معروف';
+
+    const embed = new EmbedBuilder()
+        .setColor('#3498DB')
+        .setTitle('⚙️ إعدادات السيرفر تم تعديلها')
+        .addFields(
+            { name: '📋 التغييرات', value: changes.join('\n'), inline: false },
+            { name: '👮 بواسطة', value: executorText, inline: true }
+        )
+        .setThumbnail(newGuild.iconURL())
+        .setTimestamp()
+        .setFooter({ text: `Guild ID: ${newGuild.id}` });
+
+    await sendLog(newGuild, embed);
 }
 
 module.exports = {
@@ -543,10 +683,14 @@ module.exports = {
     logBan,
     logUnban,
     logVoiceState,
-    // === الجديد ===
     logKick,
     logTimeout,
     logChannelUpdate,
-    logRoleUpdate
+    logRoleUpdate,
+    logEmojiCreate,
+    logEmojiDelete,
+    logInviteCreate,
+    logInviteDelete,
+    logGuildUpdate
 };
 

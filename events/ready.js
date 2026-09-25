@@ -14,8 +14,14 @@ module.exports = {
     once: true,
 
     async execute(client) {
-        // ─── تسجيل معرف البوت في Logger (لمنع تسجيل أفعاله الإدارية كمخالفات) ─
-        try { logger.setBotId(client.user.id); } catch {}
+        // ─── تسجيل معرف البوت في Logger و Security Monitor (لمنع تسجيل أفعاله كمخالفات) ─
+        try { 
+            logger.setBotId(client.user.id); 
+            const securityMonitor = require('../utils/security-monitor');
+            securityMonitor.setBotId(client.user.id);
+        } catch (e) {
+            console.error('[Ready] Failed to set bot ID:', e);
+        }
 
         const guildCount   = client.guilds.cache.size;
         const userCount    = client.users.cache.size;
