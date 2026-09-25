@@ -208,12 +208,9 @@ async function _handleButton(interaction) {
         return _require('../commands/moderation/color-roles')?.assignColorRole(interaction, colorName);
     }
 
-    // ✅ Server Setup — يُدار بـ collector داخل server-setup.js
-    // إذا وصل هنا يعني الـ collector انتهى → نرد بصمت
+    // ✅ Server Setup — يُدار بـ awaitMessageComponent داخل server-setup.js
+    // يُمَرَّر مباشرة بدون deferUpdate لتجنب خطأ Unknown Interaction / Already Replied
     if (id === 'setup_confirm' || id === 'setup_cancel') {
-        if (!interaction.replied && !interaction.deferred) {
-            await interaction.deferUpdate().catch(() => {});
-        }
         return;
     }
 

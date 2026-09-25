@@ -1102,8 +1102,17 @@ module.exports = {
         try {
             const response = await confirmMsg.awaitMessageComponent({ filter, time: 30_000 });
 
+            // دالة استجابة آمنة تتأكد من حالة الـ interaction
+            const safeAck = async (payload) => {
+                if (response.deferred || response.replied) {
+                    return await response.editReply(payload).catch(() => {});
+                } else {
+                    return await response.update(payload).catch(() => {});
+                }
+            };
+
             if (response.customId === 'setup_cancel') {
-                await response.update({
+                await safeAck({
                     embeds: [new EmbedBuilder().setColor(C.red).setTitle('❌ تم إلغاء العملية').setDescription('> لم يتم أي تغيير.')],
                     components: []
                 });
@@ -1111,7 +1120,7 @@ module.exports = {
             }
 
             // بدء البناء
-            await response.update({
+            await safeAck({
                 embeds: [buildProgressEmbed('🚀 بدء العملية...', 0, isReset)],
                 components: []
             });
